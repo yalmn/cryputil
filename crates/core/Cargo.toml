@@ -1,0 +1,16 @@
+[package]
+name = "cryputil-core"
+version = "0.2.0"
+edition = "2021"
+
+[lib]
+name = "cryputil_core"
+path = "src/lib.rs"
+
+[features]
+default = []
+serde = ["dep:serde", "dep:serde_json"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }

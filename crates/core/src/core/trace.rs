@@ -1,9 +1,11 @@
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Table {
     pub headers: Vec<String>,
     pub rows: Vec<Vec<String>>,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Step {
     pub number: usize,
@@ -12,6 +14,7 @@ pub struct Step {
     pub table: Option<Table>,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Trace {
     pub algorithm: String,

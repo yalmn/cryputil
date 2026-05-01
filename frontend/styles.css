@@ -1,0 +1,114 @@
+:root {
+  --bg: #0a0e0a;
+  --fg: #4cff7a;
+  --fg-dim: #2a8a44;
+  --error: #ff7a4c;
+  --warn: #ffd34c;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "JetBrains Mono", "Fira Code", "Menlo", "Consolas", monospace;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.crt {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  text-shadow: 0 0 1px rgba(76, 255, 122, 0.5);
+}
+
+.crt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    rgba(0, 0, 0, 0.18) 3px
+  );
+  mix-blend-mode: multiply;
+  z-index: 5;
+}
+
+.crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0) 50%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  z-index: 6;
+}
+
+.terminal {
+  flex: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+  scrollbar-width: thin;
+  scrollbar-color: var(--fg-dim) transparent;
+}
+
+.terminal .line { white-space: pre-wrap; }
+.terminal .ascii { color: var(--fg); }
+.terminal .echo  { color: var(--fg); }
+.terminal .info  { color: var(--fg-dim); }
+.terminal .err   { color: var(--error); }
+.terminal .warn  { color: var(--warn); }
+
+.prompt-line {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.prompt {
+  color: var(--fg);
+  user-select: none;
+}
+
+#prompt-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font: inherit;
+  caret-color: transparent;
+}
+
+.cursor {
+  display: inline-block;
+  width: 9px;
+  height: 1.1em;
+  background: var(--fg);
+  margin-left: -2px;
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  to { opacity: 0; }
+}
+
+@media (max-width: 600px) {
+  html, body { font-size: 13px; }
+  .crt { padding: 10px; }
+}

@@ -117,4 +117,11 @@ Ziel: GitHub-basiertes Deployment vorbereiten.
 
 ## Status-Logbuch
 
-(Wird beim Fortschritt ergänzt.)
+- Phase 0 erledigt: `.gitignore` + target untrack, 5 Modul-Commits, Tag `v0.1.0-stable`, gepusht.
+- Phase 1 erledigt: `development` angelegt und auf Remote gepusht.
+- Phase 2 erledigt: Workspace mit `crates/core` + `crates/cli`, alle 29 Tests grün, Binary `cryputil` läuft, in `development` gemerged und gepusht.
+- Phase 3 erledigt: serde-Derive auf Trace-Typen, zentraler Dispatcher mit Whitelist (~35 Kommandos), `crates/wasm` mit `wasm-bindgen` baut für `wasm32-unknown-unknown`. 34 Tests grün.
+- Phase 4 erledigt: Retro-Terminal-Frontend (`frontend/`) mit CRT-Effekt, History, help/clear/version. Lädt WASM-Bundle aus `frontend/pkg/`. Doku in `frontend/README.md`. Lokaler Build erfordert `wasm-pack` (in CI installiert).
+- Phase 5 erledigt: `crates/server` mit axum, Routen `GET /api/health`, `GET /api/commands`, `POST /api/run`. Body-Limit 32 KiB, Timeout 5s, CORS via `ALLOWED_ORIGIN`. Dockerfile für Container-Deploy. 3 Integrationstests grün, gesamt 37/37.
+- Phase 6 erledigt: GitHub-Actions-Workflows (`ci.yml`, `pages.yml`, `server.yml`), `README.md` mit Lokal-Dev und Deploy-Pfaden, `.env.example`, gitignore um `frontend/pkg` ergänzt.
+- Nächste Phase: 7 (release-vorbereitung, optional).
