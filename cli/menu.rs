@@ -1,9 +1,11 @@
 use crate::algorithms::{
     diffie_hellman,
     ecc::{self, Point},
-    elgamal, fiat_shamir, rsa, shamir_three_pass,
+    elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature, shamir_three_pass,
 };
-use crate::analysis::{bsgs, fermat_factorization, pollard_rho_dlog, pollard_rho_factor};
+use crate::analysis::{
+    bsgs, columnar_transposition, fermat_factorization, pollard_rho_dlog, pollard_rho_factor,
+};
 use crate::cli::prompts::{ask_int, ask_int_min, ask_yes_no, read_line};
 use crate::core::error::CalcResult;
 use crate::core::trace::Trace;
@@ -131,6 +133,10 @@ pub fn crypto_menu() -> Option<Trace> {
     println!("7) Shamir Three-Pass");
     println!("8) ECC: Punktaddition");
     println!("9) ECC: Skalarmultiplikation");
+    println!("10) RSA-Signatur: Erzeugung");
+    println!("11) RSA-Signatur: Verifikation");
+    println!("12) ElGamal-Signatur: Erzeugung");
+    println!("13) ElGamal-Signatur: Verifikation");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -206,6 +212,36 @@ pub fn crypto_menu() -> Option<Trace> {
             let py = ask_int("P.y");
             handle(ecc::scalar_trace(a, b, p, k, Point::Affine(px, py)))
         }
+        "10" => {
+            let n = ask_int_min("n", 2);
+            let d = ask_int_min("d (privat)", 1);
+            let m = ask_int_min("m (Nachricht)", 0);
+            handle(rsa_signature::sign(n, d, m))
+        }
+        "11" => {
+            let n = ask_int_min("n", 2);
+            let e = ask_int_min("e (öffentlich)", 1);
+            let m = ask_int_min("m (Nachricht)", 0);
+            let s = ask_int_min("s (Signatur)", 0);
+            handle(rsa_signature::verify(n, e, m, s))
+        }
+        "12" => {
+            let p = ask_int_min("p (prim)", 2);
+            let g = ask_int_min("g", 2);
+            let d = ask_int_min("d (privat)", 1);
+            let m = ask_int_min("m (Nachricht)", 0);
+            let k = ask_int_min("k (ephemeral)", 1);
+            handle(elgamal_signature::sign(p, g, d, m, k))
+        }
+        "13" => {
+            let p = ask_int_min("p (prim)", 2);
+            let g = ask_int_min("g", 2);
+            let e = ask_int_min("e (öffentlich)", 1);
+            let m = ask_int_min("m (Nachricht)", 0);
+            let r = ask_int_min("r", 0);
+            let s = ask_int_min("s", 0);
+            handle(elgamal_signature::verify(p, g, e, m, r, s))
+        }
         _ => None,
     }
 }
@@ -223,9 +259,9 @@ pub fn ident_menu() -> Option<Trace> {
         "1" => {
             let n = ask_int_min("n", 2);
             let s = ask_int_min("s (Geheimnis)", 1);
-            let r = ask_int_min("r (Commitment-Zufall)", 1);
+            let k = ask_int_min("k (Commitment-Zufall)", 1);
             let e = ask_int_min("e (0 oder 1)", 0);
-            handle(fiat_shamir::round(n, s, r, e))
+            handle(fiat_shamir::round(n, s, k, e))
         }
         _ => None,
     }
@@ -241,6 +277,7 @@ pub fn analysis_menu() -> Option<Trace> {
     println!("2) Pollard-Rho (Faktorisierung)");
     println!("3) Pollard-Rho (diskreter Logarithmus)");
     println!("4) Fermat-Faktorisierung");
+    println!("5) Spaltentransposition (Varianten)");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -263,6 +300,10 @@ pub fn analysis_menu() -> Option<Trace> {
         "4" => {
             let n = ask_int_min("n", 3);
             handle(fermat_factorization::factor(n))
+        }
+        "5" => {
+            let text = read_line("  Geheimtext: ");
+            handle(columnar_transposition::decrypt(&text))
         }
         _ => None,
     }
