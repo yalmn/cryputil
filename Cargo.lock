@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
-name = "cryputil"
-version = "0.1.0"
+name = "cryputil-cli"
+version = "0.2.0"
+dependencies = [
+ "cryputil-core",
+]
+
+[[package]]
+name = "cryputil-core"
+version = "0.2.0"

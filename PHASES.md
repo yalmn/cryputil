@@ -117,4 +117,6 @@ Ziel: GitHub-basiertes Deployment vorbereiten.
 
 ## Status-Logbuch
 
-(Wird beim Fortschritt ergänzt.)
+- Phase 0 erledigt: `.gitignore` + target untrack, 5 Modul-Commits, Tag `v0.1.0-stable`, gepusht.
+- Phase 1 erledigt: `development` angelegt und auf Remote gepusht.
+- Aktueller Branch: `development`. Nächste Phase: 2 (cargo workspace refactor).

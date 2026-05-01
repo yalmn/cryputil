@@ -1,22 +1,22 @@
-use crate::algorithms::{
+use crate::cli::prompts::{ask_int, ask_int_min, ask_yes_no, read_line};
+use crate::render::text;
+use cryputil_core::algorithms::{
     diffie_hellman,
     ecc::{self, Point},
     elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature, shamir_three_pass,
 };
-use crate::analysis::{
+use cryputil_core::analysis::{
     bsgs, columnar_transposition, fermat_factorization, pollard_rho_dlog, pollard_rho_factor,
 };
-use crate::cli::prompts::{ask_int, ask_int_min, ask_yes_no, read_line};
-use crate::core::error::CalcResult;
-use crate::core::trace::Trace;
-use crate::modulo::{cyclic_groups, inverse_additive, inverse_multiplicative, operations};
-use crate::playbooks::{
+use cryputil_core::core::error::CalcResult;
+use cryputil_core::core::trace::Trace;
+use cryputil_core::modulo::{cyclic_groups, inverse_additive, inverse_multiplicative, operations};
+use cryputil_core::playbooks::{
     dh_geg_g_p_alpha_beta_ges_k, dh_ges_schluessel, elgamal_geg_kpub_ges_kpriv,
     elgamal_geg_kpub_ges_priv_verf, elgamal_geg_sig_kpub_ges_legitsig, elgamal_mult_homomorph,
     rsa_geg_kpub_ges_kpriv_plain, rsa_geg_kpub_kpriv_encm_ges_kpriv_to_kpub,
     rsa_geg_pub_enc_ges_priv_plain,
 };
-use crate::render::text;
 
 // Input: Trace-Ergebnis
 // Calc:  bei Erfolg fragen, ob Schritte angezeigt werden, sonst Fehler ausgeben

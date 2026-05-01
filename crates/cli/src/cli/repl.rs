@@ -1,6 +1,6 @@
 use crate::cli::menu;
-use crate::core::trace::Trace;
 use crate::render::text;
+use cryputil_core::core::trace::Trace;
 
 // Input: -
 // Calc:  Hauptschleife mit letztem Trace im Speicher

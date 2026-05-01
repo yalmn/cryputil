@@ -1,4 +1,4 @@
-use crate::core::trace::{Step, Table, Trace};
+use cryputil_core::core::trace::{Step, Table, Trace};
 
 // Input: Tabelle
 // Calc:  Spaltenbreiten berechnen

@@ -1,8 +1,3 @@
-[package]
-name = "cryputil"
-version = "0.1.0"
-edition = "2021"
-
-[[bin]]
-name = "cryputil"
-path = "main.rs"
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/cli"]
