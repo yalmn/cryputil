@@ -265,7 +265,7 @@ pub fn commands() -> &'static [CommandSpec] {
         CommandSpec {
             name: "mod.pow",
             params: &["a", "e", "n"],
-            description: "Modulare Exponentiation",
+            description: "Schnelle Modulare Exponentiation",
         },
         CommandSpec {
             name: "mod.inv_add",
