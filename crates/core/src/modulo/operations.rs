@@ -66,7 +66,7 @@ pub fn mul(a: i128, b: i128, n: i128) -> CalcResult<Trace> {
 // Calc:  a^e mod n via Square-and-Multiply mit Tracetabelle
 // Output: Trace
 pub fn pow(a: i128, e: i128, n: i128) -> CalcResult<Trace> {
-    let mut t = Trace::new("Modulare Exponentiation (Square-and-Multiply)");
+    let mut t = Trace::new("Schnelle Modulare Exponentiation (Square-and-Multiply)");
     t.input("a", a);
     t.input("e", e);
     t.input("n", n);

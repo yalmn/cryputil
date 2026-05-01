@@ -63,7 +63,7 @@ pub fn modulo_menu() -> Option<Trace> {
     println!("1) Addition");
     println!("2) Subtraktion");
     println!("3) Multiplikation");
-    println!("4) Exponentiation");
+    println!("4) Schnelle Modulare Exponentiation");
     println!("5) Additives Inverses");
     println!("6) Multiplikatives Inverses");
     println!("7) Zyklische Untergruppe");
