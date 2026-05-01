@@ -429,3 +429,40 @@ pub fn commands() -> &'static [CommandSpec] {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_mod_add_via_dispatch() {
+        let trace = run("mod.add", &json!({"a": 7, "b": 5, "n": 12})).unwrap();
+        assert_eq!(trace.result[0].1, "0");
+    }
+
+    #[test]
+    fn test_string_numbers_for_large_values() {
+        let trace = run("rsa.encrypt", &json!({"n": "143", "e": "7", "m": "9"})).unwrap();
+        assert!(!trace.result.is_empty());
+    }
+
+    #[test]
+    fn test_unknown_command() {
+        let err = run("nope", &json!({})).unwrap_err();
+        assert!(err.to_string().contains("Unbekanntes Kommando"));
+    }
+
+    #[test]
+    fn test_missing_param() {
+        let err = run("mod.add", &json!({"a": 1, "b": 2})).unwrap_err();
+        assert!(err.to_string().contains("'n'"));
+    }
+
+    #[test]
+    fn test_commands_listed() {
+        let cmds = commands();
+        assert!(cmds.iter().any(|c| c.name == "rsa.encrypt"));
+        assert!(cmds.len() > 20);
+    }
+}
