@@ -120,4 +120,5 @@ Ziel: GitHub-basiertes Deployment vorbereiten.
 - Phase 0 erledigt: `.gitignore` + target untrack, 5 Modul-Commits, Tag `v0.1.0-stable`, gepusht.
 - Phase 1 erledigt: `development` angelegt und auf Remote gepusht.
 - Phase 2 erledigt: Workspace mit `crates/core` + `crates/cli`, alle 29 Tests grün, Binary `cryputil` läuft, in `development` gemerged und gepusht.
-- Nächste Phase: 3 (wasm bindings).
+- Phase 3 erledigt: serde-Derive auf Trace-Typen, zentraler Dispatcher mit Whitelist (~35 Kommandos), `crates/wasm` mit `wasm-bindgen` baut für `wasm32-unknown-unknown`. 34 Tests grün.
+- Nächste Phase: 4 (web ui).
