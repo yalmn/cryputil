@@ -124,4 +124,4 @@ Ziel: GitHub-basiertes Deployment vorbereiten.
 - Phase 4 erledigt: Retro-Terminal-Frontend (`frontend/`) mit CRT-Effekt, History, help/clear/version. Lädt WASM-Bundle aus `frontend/pkg/`. Doku in `frontend/README.md`. Lokaler Build erfordert `wasm-pack` (in CI installiert).
 - Phase 5 erledigt: `crates/server` mit axum, Routen `GET /api/health`, `GET /api/commands`, `POST /api/run`. Body-Limit 32 KiB, Timeout 5s, CORS via `ALLOWED_ORIGIN`. Dockerfile für Container-Deploy. 3 Integrationstests grün, gesamt 37/37.
 - Phase 6 erledigt: GitHub-Actions-Workflows (`ci.yml`, `pages.yml`, `server.yml`), `README.md` mit Lokal-Dev und Deploy-Pfaden, `.env.example`, gitignore um `frontend/pkg` ergänzt.
-- Nächste Phase: 7 (release-vorbereitung, optional).
+- Phase 7 erledigt: PR #1 development → main gemerged, Tag `v0.2.0` gesetzt, GitHub-Release veröffentlicht.
