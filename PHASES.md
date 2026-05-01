@@ -122,4 +122,5 @@ Ziel: GitHub-basiertes Deployment vorbereiten.
 - Phase 2 erledigt: Workspace mit `crates/core` + `crates/cli`, alle 29 Tests grün, Binary `cryputil` läuft, in `development` gemerged und gepusht.
 - Phase 3 erledigt: serde-Derive auf Trace-Typen, zentraler Dispatcher mit Whitelist (~35 Kommandos), `crates/wasm` mit `wasm-bindgen` baut für `wasm32-unknown-unknown`. 34 Tests grün.
 - Phase 4 erledigt: Retro-Terminal-Frontend (`frontend/`) mit CRT-Effekt, History, help/clear/version. Lädt WASM-Bundle aus `frontend/pkg/`. Doku in `frontend/README.md`. Lokaler Build erfordert `wasm-pack` (in CI installiert).
-- Nächste Phase: 5 (api wrapper).
+- Phase 5 erledigt: `crates/server` mit axum, Routen `GET /api/health`, `GET /api/commands`, `POST /api/run`. Body-Limit 32 KiB, Timeout 5s, CORS via `ALLOWED_ORIGIN`. Dockerfile für Container-Deploy. 3 Integrationstests grün, gesamt 37/37.
+- Nächste Phase: 6 (deployment setup).
