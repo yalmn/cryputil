@@ -1,0 +1,11 @@
+[package]
+name = "cryputil-cli"
+version = "0.2.0"
+edition = "2021"
+
+[[bin]]
+name = "cryputil"
+path = "src/main.rs"
+
+[dependencies]
+cryputil-core = { path = "../core" }

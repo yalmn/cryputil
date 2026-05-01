@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use crate::core::validation::parse_int;
+use cryputil_core::core::validation::parse_int;
 
 // Input: Aufforderungstext
 // Calc:  Eingabezeile lesen
