@@ -9,6 +9,9 @@ const BANNER = [
   "| (__| |  | |_| | |_) | |_| | |_| | |",
   " \\___|_|   \\__, | .__/ \\__,_|\\__|_|_|",
   "           |___/|_|                  ",
+  "",
+  "Author: https://github.com/yalmn",
+  "v0.2.0, 2026",
 ].join("\n");
 
 const I = (key, label, min) => ({ type: "int", key, label, min });
