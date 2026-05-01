@@ -2,17 +2,17 @@ use crate::core::error::{CalcError, CalcResult};
 use crate::core::math::{mod_pow, rem_euclid};
 use crate::core::trace::Trace;
 
-// Input: n, s (Geheimnis), r (Commitment-Zufall), e (0/1)
-// Calc:  Eine Runde Fiat-Shamir
+// Input: n, s (Geheimnis), k (Commitment-Zufall), e (0/1)
+// Calc:  Eine Runde Fiat-Shamir mit Commitment x = k² mod n
 // Output: Trace
-pub fn round(n: i128, s: i128, r: i128, e: i128) -> CalcResult<Trace> {
+pub fn round(n: i128, s: i128, k: i128, e: i128) -> CalcResult<Trace> {
     if !(e == 0 || e == 1) {
         return Err(CalcError::UngueltigeEingabe("e muss 0 oder 1 sein".into()));
     }
     let mut t = Trace::new("Fiat-Shamir Identifikationsprotokoll (eine Runde)");
     t.input("n", n);
     t.input("s (Geheimnis)", s);
-    t.input("r (Commitment-Zufall)", r);
+    t.input("k (Commitment-Zufall)", k);
     t.input("e (Challenge)", e);
 
     let s1 = t.step("Public Key");
@@ -20,16 +20,16 @@ pub fn round(n: i128, s: i128, r: i128, e: i128) -> CalcResult<Trace> {
     t.line(s1, format!("v = s² mod n = {}", v));
 
     let s2 = t.step("Commitment");
-    let x = mod_pow(r, 2, n)?;
-    t.line(s2, format!("x = r² mod n = {}", x));
+    let x = mod_pow(k, 2, n)?;
+    t.line(s2, format!("x = k² mod n = {}", x));
 
     let s3 = t.step("Response");
     let y = if e == 0 {
-        rem_euclid(r, n)
+        rem_euclid(k, n)
     } else {
-        rem_euclid(r * s, n)
+        rem_euclid(k * s, n)
     };
-    t.line(s3, format!("y = r · s^e mod n = {}", y));
+    t.line(s3, format!("y = k · s^e mod n = {}", y));
 
     let s4 = t.step("Verifikation");
     let lhs = mod_pow(y, 2, n)?;
