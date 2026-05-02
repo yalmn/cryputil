@@ -6,3 +6,4 @@ pub mod fiat_shamir;
 pub mod rsa;
 pub mod rsa_signature;
 pub mod shamir_three_pass;
+pub mod substitution;

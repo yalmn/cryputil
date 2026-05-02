@@ -3,10 +3,11 @@ use serde_json::Value;
 use crate::algorithms::ecc::Point;
 use crate::algorithms::{
     diffie_hellman, ecc, elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature,
-    shamir_three_pass,
+    shamir_three_pass, substitution,
 };
 use crate::analysis::{
-    bsgs, columnar_transposition, fermat_factorization, pollard_rho_dlog, pollard_rho_factor,
+    bsgs, columnar_transposition, fermat_factorization, frequency_analysis, pollard_rho_dlog,
+    pollard_rho_factor,
 };
 use crate::core::error::{CalcError, CalcResult};
 use crate::core::trace::Trace;
@@ -167,6 +168,11 @@ pub fn run(command: &str, params: &Value) -> CalcResult<Trace> {
         }
         "fermat.factor" => fermat_factorization::factor(pi(params, "n")?),
         "transposition.decrypt" => columnar_transposition::decrypt(&ps(params, "text")?),
+        "freq.analyze" => frequency_analysis::analyze(&ps(params, "text")?, &ps(params, "lang")?),
+
+        // Klassische Chiffren
+        "subst.encrypt" => substitution::encrypt(&ps(params, "text")?, &ps(params, "key")?),
+        "subst.decrypt" => substitution::decrypt(&ps(params, "text")?, &ps(params, "key")?),
 
         // Playbooks
         "pb.elgamal_mult_homomorph" => elgamal_mult_homomorph::run(
@@ -381,6 +387,21 @@ pub fn commands() -> &'static [CommandSpec] {
             name: "transposition.decrypt",
             params: &["text"],
             description: "Spaltentransposition",
+        },
+        CommandSpec {
+            name: "freq.analyze",
+            params: &["text", "lang"],
+            description: "Häufigkeitsanalyse (de/en)",
+        },
+        CommandSpec {
+            name: "subst.encrypt",
+            params: &["text", "key"],
+            description: "Substitution: Verschlüsselung",
+        },
+        CommandSpec {
+            name: "subst.decrypt",
+            params: &["text", "key"],
+            description: "Substitution: Entschlüsselung",
         },
         CommandSpec {
             name: "pb.elgamal_mult_homomorph",

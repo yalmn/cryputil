@@ -61,6 +61,8 @@ const MENUS = {
       { label: "RSA-Signatur: Verifikation", cmd: "rsa.verify", steps: [I("n", "n", 2), I("e", "e (öffentlich)", 1), I("m", "m (Nachricht)", 0), I("s", "s (Signatur)", 0)] },
       { label: "ElGamal-Signatur: Erzeugung", cmd: "elgamal.sign", steps: [I("p", "p (prim)", 2), I("g", "g", 2), I("d", "d (privat)", 1), I("m", "m (Nachricht)", 0), I("k", "k (ephemeral)", 1)] },
       { label: "ElGamal-Signatur: Verifikation", cmd: "elgamal.verify", steps: [I("p", "p (prim)", 2), I("g", "g", 2), I("e", "e (öffentlich)", 1), I("m", "m (Nachricht)", 0), I("r", "r", 0), I("s", "s", 0)] },
+      { label: "Substitution: Verschlüsselung", cmd: "subst.encrypt", steps: [S("text", "Klartext"), S("key", "Schlüssel (26 Buchstaben, Bild von A..Z)")] },
+      { label: "Substitution: Entschlüsselung", cmd: "subst.decrypt", steps: [S("text", "Chiffrat"), S("key", "Schlüssel (26 Buchstaben, Bild von A..Z)")] },
     ],
   },
   ident: {
@@ -77,6 +79,7 @@ const MENUS = {
       { label: "Pollard-Rho (diskreter Logarithmus)", cmd: "pollard_rho.dlog", steps: [I("g", "g", 2), I("h", "h", 1), I("p", "p (prim)", 2)] },
       { label: "Fermat-Faktorisierung", cmd: "fermat.factor", steps: [I("n", "n", 3)] },
       { label: "Spaltentransposition (Varianten)", cmd: "transposition.decrypt", steps: [S("text", "Geheimtext")] },
+      { label: "Häufigkeitsanalyse", cmd: "freq.analyze", steps: [S("text", "Geheimtext"), S("lang", "Sprache (de/en)")] },
     ],
   },
   playbooks: {

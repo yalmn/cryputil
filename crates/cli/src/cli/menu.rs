@@ -3,10 +3,11 @@ use crate::render::text;
 use cryputil_core::algorithms::{
     diffie_hellman,
     ecc::{self, Point},
-    elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature, shamir_three_pass,
+    elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature, shamir_three_pass, substitution,
 };
 use cryputil_core::analysis::{
-    bsgs, columnar_transposition, fermat_factorization, pollard_rho_dlog, pollard_rho_factor,
+    bsgs, columnar_transposition, fermat_factorization, frequency_analysis, pollard_rho_dlog,
+    pollard_rho_factor,
 };
 use cryputil_core::core::error::CalcResult;
 use cryputil_core::core::trace::Trace;
@@ -137,6 +138,8 @@ pub fn crypto_menu() -> Option<Trace> {
     println!("11) RSA-Signatur: Verifikation");
     println!("12) ElGamal-Signatur: Erzeugung");
     println!("13) ElGamal-Signatur: Verifikation");
+    println!("14) Substitution: Verschlüsselung");
+    println!("15) Substitution: Entschlüsselung");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -242,6 +245,16 @@ pub fn crypto_menu() -> Option<Trace> {
             let s = ask_int_min("s", 0);
             handle(elgamal_signature::verify(p, g, e, m, r, s))
         }
+        "14" => {
+            let text = read_line("  Klartext: ");
+            let key = read_line("  Schlüssel (26 Buchstaben, Bild von A..Z): ");
+            handle(substitution::encrypt(&text, &key))
+        }
+        "15" => {
+            let text = read_line("  Chiffrat: ");
+            let key = read_line("  Schlüssel (26 Buchstaben, Bild von A..Z): ");
+            handle(substitution::decrypt(&text, &key))
+        }
         _ => None,
     }
 }
@@ -278,6 +291,7 @@ pub fn analysis_menu() -> Option<Trace> {
     println!("3) Pollard-Rho (diskreter Logarithmus)");
     println!("4) Fermat-Faktorisierung");
     println!("5) Spaltentransposition (Varianten)");
+    println!("6) Häufigkeitsanalyse");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -304,6 +318,11 @@ pub fn analysis_menu() -> Option<Trace> {
         "5" => {
             let text = read_line("  Geheimtext: ");
             handle(columnar_transposition::decrypt(&text))
+        }
+        "6" => {
+            let text = read_line("  Geheimtext: ");
+            let lang = read_line("  Sprache (de/en): ");
+            handle(frequency_analysis::analyze(&text, &lang))
         }
         _ => None,
     }
