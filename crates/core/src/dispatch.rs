@@ -2,11 +2,12 @@ use serde_json::Value;
 
 use crate::algorithms::ecc::Point;
 use crate::algorithms::{
-    diffie_hellman, ecc, elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature,
-    shamir_three_pass,
+    diffie_hellman, ecc, elgamal, elgamal_signature, fiat_shamir, paillier, rsa, rsa_signature,
+    shamir_three_pass, substitution,
 };
 use crate::analysis::{
-    bsgs, columnar_transposition, fermat_factorization, pollard_rho_dlog, pollard_rho_factor,
+    bsgs, columnar_transposition, fermat_factorization, frequency_analysis, pollard_rho_dlog,
+    pollard_rho_factor,
 };
 use crate::core::error::{CalcError, CalcResult};
 use crate::core::trace::Trace;
@@ -14,8 +15,8 @@ use crate::modulo::{cyclic_groups, inverse_additive, inverse_multiplicative, ope
 use crate::playbooks::{
     dh_geg_g_p_alpha_beta_ges_k, dh_ges_schluessel, elgamal_geg_kpub_ges_kpriv,
     elgamal_geg_kpub_ges_priv_verf, elgamal_geg_sig_kpub_ges_legitsig, elgamal_mult_homomorph,
-    rsa_geg_kpub_ges_kpriv_plain, rsa_geg_kpub_kpriv_encm_ges_kpriv_to_kpub,
-    rsa_geg_pub_enc_ges_priv_plain,
+    paillier_add_homomorph, rsa_geg_kpub_ges_kpriv_plain,
+    rsa_geg_kpub_kpriv_encm_ges_kpriv_to_kpub, rsa_geg_pub_enc_ges_priv_plain,
 };
 
 // Input: Eingabewert (Value), Schlüssel
@@ -167,6 +168,26 @@ pub fn run(command: &str, params: &Value) -> CalcResult<Trace> {
         }
         "fermat.factor" => fermat_factorization::factor(pi(params, "n")?),
         "transposition.decrypt" => columnar_transposition::decrypt(&ps(params, "text")?),
+        "freq.analyze" => frequency_analysis::analyze(&ps(params, "text")?, &ps(params, "lang")?),
+
+        // Klassische Chiffren
+        "subst.encrypt" => substitution::encrypt(&ps(params, "text")?, &ps(params, "key")?),
+        "subst.decrypt" => substitution::decrypt(&ps(params, "text")?, &ps(params, "key")?),
+
+        // Paillier
+        "paillier.keygen" => paillier::keygen(pi(params, "p")?, pi(params, "q")?),
+        "paillier.encrypt" => paillier::encrypt(
+            pi(params, "n")?,
+            pi(params, "g")?,
+            pi(params, "m")?,
+            pi(params, "r")?,
+        ),
+        "paillier.decrypt" => paillier::decrypt(
+            pi(params, "n")?,
+            pi(params, "lambda")?,
+            pi(params, "mu")?,
+            pi(params, "c")?,
+        ),
 
         // Playbooks
         "pb.elgamal_mult_homomorph" => elgamal_mult_homomorph::run(
@@ -178,6 +199,14 @@ pub fn run(command: &str, params: &Value) -> CalcResult<Trace> {
             pi(params, "b1")?,
             pi(params, "a")?,
             pi(params, "b")?,
+        ),
+        "pb.paillier_add_homomorph" => paillier_add_homomorph::run(
+            pi(params, "p")?,
+            pi(params, "q")?,
+            pi(params, "m1")?,
+            pi(params, "m2")?,
+            pi(params, "r1")?,
+            pi(params, "r2")?,
         ),
         "pb.rsa_priv_from_pub_y" => rsa_geg_pub_enc_ges_priv_plain::run(
             pi(params, "n")?,
@@ -383,9 +412,44 @@ pub fn commands() -> &'static [CommandSpec] {
             description: "Spaltentransposition",
         },
         CommandSpec {
+            name: "freq.analyze",
+            params: &["text", "lang"],
+            description: "Häufigkeitsanalyse (de/en)",
+        },
+        CommandSpec {
+            name: "subst.encrypt",
+            params: &["text", "key"],
+            description: "Substitution: Verschlüsselung",
+        },
+        CommandSpec {
+            name: "subst.decrypt",
+            params: &["text", "key"],
+            description: "Substitution: Entschlüsselung",
+        },
+        CommandSpec {
+            name: "paillier.keygen",
+            params: &["p", "q"],
+            description: "Paillier-Schlüsselerzeugung",
+        },
+        CommandSpec {
+            name: "paillier.encrypt",
+            params: &["n", "g", "m", "r"],
+            description: "Paillier-Verschlüsselung",
+        },
+        CommandSpec {
+            name: "paillier.decrypt",
+            params: &["n", "lambda", "mu", "c"],
+            description: "Paillier-Entschlüsselung",
+        },
+        CommandSpec {
             name: "pb.elgamal_mult_homomorph",
             params: &["p", "g", "e", "d", "a1", "b1", "a", "b"],
             description: "Playbook: ElGamal Homomorphismus",
+        },
+        CommandSpec {
+            name: "pb.paillier_add_homomorph",
+            params: &["p", "q", "m1", "m2", "r1", "r2"],
+            description: "Playbook: Paillier Additiver Homomorphismus",
         },
         CommandSpec {
             name: "pb.rsa_priv_from_pub_y",

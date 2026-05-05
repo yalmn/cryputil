@@ -3,10 +3,12 @@ use crate::render::text;
 use cryputil_core::algorithms::{
     diffie_hellman,
     ecc::{self, Point},
-    elgamal, elgamal_signature, fiat_shamir, rsa, rsa_signature, shamir_three_pass,
+    elgamal, elgamal_signature, fiat_shamir, paillier, rsa, rsa_signature, shamir_three_pass,
+    substitution,
 };
 use cryputil_core::analysis::{
-    bsgs, columnar_transposition, fermat_factorization, pollard_rho_dlog, pollard_rho_factor,
+    bsgs, columnar_transposition, fermat_factorization, frequency_analysis, pollard_rho_dlog,
+    pollard_rho_factor,
 };
 use cryputil_core::core::error::CalcResult;
 use cryputil_core::core::trace::Trace;
@@ -14,8 +16,8 @@ use cryputil_core::modulo::{cyclic_groups, inverse_additive, inverse_multiplicat
 use cryputil_core::playbooks::{
     dh_geg_g_p_alpha_beta_ges_k, dh_ges_schluessel, elgamal_geg_kpub_ges_kpriv,
     elgamal_geg_kpub_ges_priv_verf, elgamal_geg_sig_kpub_ges_legitsig, elgamal_mult_homomorph,
-    rsa_geg_kpub_ges_kpriv_plain, rsa_geg_kpub_kpriv_encm_ges_kpriv_to_kpub,
-    rsa_geg_pub_enc_ges_priv_plain,
+    paillier_add_homomorph, rsa_geg_kpub_ges_kpriv_plain,
+    rsa_geg_kpub_kpriv_encm_ges_kpriv_to_kpub, rsa_geg_pub_enc_ges_priv_plain,
 };
 
 // Input: Trace-Ergebnis
@@ -137,6 +139,11 @@ pub fn crypto_menu() -> Option<Trace> {
     println!("11) RSA-Signatur: Verifikation");
     println!("12) ElGamal-Signatur: Erzeugung");
     println!("13) ElGamal-Signatur: Verifikation");
+    println!("14) Substitution: Verschlüsselung");
+    println!("15) Substitution: Entschlüsselung");
+    println!("16) Paillier-Schlüsselerzeugung");
+    println!("17) Paillier-Verschlüsselung");
+    println!("18) Paillier-Entschlüsselung");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -242,6 +249,35 @@ pub fn crypto_menu() -> Option<Trace> {
             let s = ask_int_min("s", 0);
             handle(elgamal_signature::verify(p, g, e, m, r, s))
         }
+        "14" => {
+            let text = read_line("  Klartext: ");
+            let key = read_line("  Schlüssel (26 Buchstaben, Bild von A..Z): ");
+            handle(substitution::encrypt(&text, &key))
+        }
+        "15" => {
+            let text = read_line("  Chiffrat: ");
+            let key = read_line("  Schlüssel (26 Buchstaben, Bild von A..Z): ");
+            handle(substitution::decrypt(&text, &key))
+        }
+        "16" => {
+            let p = ask_int_min("p (prim)", 2);
+            let q = ask_int_min("q (prim)", 2);
+            handle(paillier::keygen(p, q))
+        }
+        "17" => {
+            let n = ask_int_min("n", 2);
+            let g = ask_int_min("g", 1);
+            let m = ask_int_min("m (Klartext)", 0);
+            let r = ask_int_min("r (Zufall, gcd(r,n)=1)", 1);
+            handle(paillier::encrypt(n, g, m, r))
+        }
+        "18" => {
+            let n = ask_int_min("n", 2);
+            let lambda = ask_int_min("λ", 1);
+            let mu = ask_int_min("μ", 1);
+            let c = ask_int_min("c (Chiffrat)", 0);
+            handle(paillier::decrypt(n, lambda, mu, c))
+        }
         _ => None,
     }
 }
@@ -278,6 +314,7 @@ pub fn analysis_menu() -> Option<Trace> {
     println!("3) Pollard-Rho (diskreter Logarithmus)");
     println!("4) Fermat-Faktorisierung");
     println!("5) Spaltentransposition (Varianten)");
+    println!("6) Häufigkeitsanalyse");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -305,6 +342,11 @@ pub fn analysis_menu() -> Option<Trace> {
             let text = read_line("  Geheimtext: ");
             handle(columnar_transposition::decrypt(&text))
         }
+        "6" => {
+            let text = read_line("  Geheimtext: ");
+            let lang = read_line("  Sprache (de/en): ");
+            handle(frequency_analysis::analyze(&text, &lang))
+        }
         _ => None,
     }
 }
@@ -324,6 +366,7 @@ pub fn playbooks_menu() -> Option<Trace> {
     println!("7) RSA: aus Kpub = (n, e) und y → d und Klartext (Wireshark/pcap)");
     println!("8) ElGamal: aus Kpub = (p, g, e) und (a, b) → d und Klartext (Wireshark/pcap)");
     println!("9) Diffie-Hellman: gemeinsamer Schlüssel aus Mitschnitt (Wireshark/pcap)");
+    println!("10) Paillier: Additiver Homomorphismus");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -432,6 +475,19 @@ pub fn playbooks_menu() -> Option<Trace> {
             let a = ask_int_min("a (kombiniert)", 0);
             let b = ask_int_min("b (kombiniert)", 0);
             handle(elgamal_mult_homomorph::run(p, g, e, d, a1, b1, a, b))
+        }
+        "10" => {
+            println!();
+            println!("Paillier: Additiver Homomorphismus");
+            println!("E(m1) · E(m2) mod n² entschlüsselt zu (m1 + m2) mod n.");
+            println!("Zufallswerte r1, r2 müssen gcd(r_i, n) = 1 erfüllen.");
+            let p = ask_int_min("p (prim)", 2);
+            let q = ask_int_min("q (prim)", 2);
+            let m1 = ask_int_min("m1", 0);
+            let m2 = ask_int_min("m2", 0);
+            let r1 = ask_int_min("r1", 1);
+            let r2 = ask_int_min("r2", 1);
+            handle(paillier_add_homomorph::run(p, q, m1, m2, r1, r2))
         }
         _ => None,
     }
