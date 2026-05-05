@@ -4,6 +4,7 @@ pub mod elgamal_geg_kpub_ges_kpriv;
 pub mod elgamal_geg_kpub_ges_priv_verf;
 pub mod elgamal_geg_sig_kpub_ges_legitsig;
 pub mod elgamal_mult_homomorph;
+pub mod paillier_add_homomorph;
 pub mod rsa_geg_kpub_ges_kpriv_plain;
 pub mod rsa_geg_kpub_kpriv_encm_ges_kpriv_to_kpub;
 pub mod rsa_geg_pub_enc_ges_priv_plain;

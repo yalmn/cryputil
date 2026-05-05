@@ -63,6 +63,9 @@ const MENUS = {
       { label: "ElGamal-Signatur: Verifikation", cmd: "elgamal.verify", steps: [I("p", "p (prim)", 2), I("g", "g", 2), I("e", "e (öffentlich)", 1), I("m", "m (Nachricht)", 0), I("r", "r", 0), I("s", "s", 0)] },
       { label: "Substitution: Verschlüsselung", cmd: "subst.encrypt", steps: [S("text", "Klartext"), S("key", "Schlüssel (26 Buchstaben, Bild von A..Z)")] },
       { label: "Substitution: Entschlüsselung", cmd: "subst.decrypt", steps: [S("text", "Chiffrat"), S("key", "Schlüssel (26 Buchstaben, Bild von A..Z)")] },
+      { label: "Paillier-Schlüsselerzeugung", cmd: "paillier.keygen", steps: [I("p", "p (prim)", 2), I("q", "q (prim)", 2)] },
+      { label: "Paillier-Verschlüsselung", cmd: "paillier.encrypt", steps: [I("n", "n", 2), I("g", "g", 1), I("m", "m (Klartext)", 0), I("r", "r (Zufall, gcd(r,n)=1)", 1)] },
+      { label: "Paillier-Entschlüsselung", cmd: "paillier.decrypt", steps: [I("n", "n", 2), I("lambda", "λ", 1), I("mu", "μ", 1), I("c", "c (Chiffrat)", 0)] },
     ],
   },
   ident: {
@@ -167,6 +170,18 @@ const MENUS = {
           I("p", "p (Modul, prim)", 2), I("g", "g (Basis)", 2),
           I("alpha", "α (Alice öffentlich)", 0), I("beta", "β (Bob öffentlich)", 0),
           O("Geheimtext c im Mitschnitt vorhanden?", "c", "c (Geheimtext)", 0),
+        ],
+      },
+      {
+        label: "Paillier: Additiver Homomorphismus",
+        cmd: "pb.paillier_add_homomorph",
+        steps: [
+          T("Paillier: Additiver Homomorphismus",
+            "E(m1) · E(m2) mod n² entschlüsselt zu (m1 + m2) mod n.",
+            "Zufallswerte r1, r2 müssen gcd(r_i, n) = 1 erfüllen."),
+          I("p", "p (prim)", 2), I("q", "q (prim)", 2),
+          I("m1", "m1", 0), I("m2", "m2", 0),
+          I("r1", "r1", 1), I("r2", "r2", 1),
         ],
       },
     ],
