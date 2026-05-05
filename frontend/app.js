@@ -66,6 +66,8 @@ const MENUS = {
       { label: "Paillier-Schlüsselerzeugung", cmd: "paillier.keygen", steps: [I("p", "p (prim)", 2), I("q", "q (prim)", 2)] },
       { label: "Paillier-Verschlüsselung", cmd: "paillier.encrypt", steps: [I("n", "n", 2), I("g", "g", 1), I("m", "m (Klartext)", 0), I("r", "r (Zufall, gcd(r,n)=1)", 1)] },
       { label: "Paillier-Entschlüsselung", cmd: "paillier.decrypt", steps: [I("n", "n", 2), I("lambda", "λ", 1), I("mu", "μ", 1), I("c", "c (Chiffrat)", 0)] },
+      { label: "Caesar: Verschlüsselung", cmd: "caesar.encrypt", steps: [S("text", "Klartext"), I("shift", "Verschiebung k")] },
+      { label: "Caesar: Entschlüsselung", cmd: "caesar.decrypt", steps: [S("text", "Chiffrat"), I("shift", "Verschiebung k")] },
     ],
   },
   ident: {
