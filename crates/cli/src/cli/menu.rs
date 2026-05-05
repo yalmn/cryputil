@@ -1,7 +1,7 @@
 use crate::cli::prompts::{ask_int, ask_int_min, ask_yes_no, read_line};
 use crate::render::text;
 use cryputil_core::algorithms::{
-    diffie_hellman,
+    caesar, diffie_hellman,
     ecc::{self, Point},
     elgamal, elgamal_signature, fiat_shamir, paillier, rsa, rsa_signature, shamir_three_pass,
     substitution,
@@ -144,6 +144,8 @@ pub fn crypto_menu() -> Option<Trace> {
     println!("16) Paillier-Schlüsselerzeugung");
     println!("17) Paillier-Verschlüsselung");
     println!("18) Paillier-Entschlüsselung");
+    println!("19) Caesar: Verschlüsselung");
+    println!("20) Caesar: Entschlüsselung");
     println!("0) Zurück");
     let choice = read_line("Auswahl: ");
     match choice.as_str() {
@@ -277,6 +279,16 @@ pub fn crypto_menu() -> Option<Trace> {
             let mu = ask_int_min("μ", 1);
             let c = ask_int_min("c (Chiffrat)", 0);
             handle(paillier::decrypt(n, lambda, mu, c))
+        }
+        "19" => {
+            let text = read_line("  Klartext: ");
+            let shift = ask_int("Verschiebung k");
+            handle(caesar::encrypt(&text, shift))
+        }
+        "20" => {
+            let text = read_line("  Chiffrat: ");
+            let shift = ask_int("Verschiebung k");
+            handle(caesar::decrypt(&text, shift))
         }
         _ => None,
     }

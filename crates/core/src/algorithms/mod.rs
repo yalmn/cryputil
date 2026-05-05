@@ -1,3 +1,4 @@
+pub mod caesar;
 pub mod diffie_hellman;
 pub mod ecc;
 pub mod elgamal;

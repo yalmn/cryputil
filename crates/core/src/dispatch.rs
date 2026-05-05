@@ -2,8 +2,8 @@ use serde_json::Value;
 
 use crate::algorithms::ecc::Point;
 use crate::algorithms::{
-    diffie_hellman, ecc, elgamal, elgamal_signature, fiat_shamir, paillier, rsa, rsa_signature,
-    shamir_three_pass, substitution,
+    caesar, diffie_hellman, ecc, elgamal, elgamal_signature, fiat_shamir, paillier, rsa,
+    rsa_signature, shamir_three_pass, substitution,
 };
 use crate::analysis::{
     bsgs, columnar_transposition, fermat_factorization, frequency_analysis, pollard_rho_dlog,
@@ -173,6 +173,8 @@ pub fn run(command: &str, params: &Value) -> CalcResult<Trace> {
         // Klassische Chiffren
         "subst.encrypt" => substitution::encrypt(&ps(params, "text")?, &ps(params, "key")?),
         "subst.decrypt" => substitution::decrypt(&ps(params, "text")?, &ps(params, "key")?),
+        "caesar.encrypt" => caesar::encrypt(&ps(params, "text")?, pi(params, "shift")?),
+        "caesar.decrypt" => caesar::decrypt(&ps(params, "text")?, pi(params, "shift")?),
 
         // Paillier
         "paillier.keygen" => paillier::keygen(pi(params, "p")?, pi(params, "q")?),
@@ -425,6 +427,16 @@ pub fn commands() -> &'static [CommandSpec] {
             name: "subst.decrypt",
             params: &["text", "key"],
             description: "Substitution: Entschlüsselung",
+        },
+        CommandSpec {
+            name: "caesar.encrypt",
+            params: &["text", "shift"],
+            description: "Caesar: Verschlüsselung",
+        },
+        CommandSpec {
+            name: "caesar.decrypt",
+            params: &["text", "shift"],
+            description: "Caesar: Entschlüsselung",
         },
         CommandSpec {
             name: "paillier.keygen",
