@@ -25,11 +25,12 @@
 
 <div id="palette" class="palette hidden" aria-hidden="true">
   <div class="palette-box" role="dialog" aria-label="Befehls-Suche">
-    <input id="palette-input" type="text" placeholder="Befehl suchen…"
+    <div id="palette-cwd" class="palette-cwd">cryputil</div>
+    <input id="palette-input" type="text" placeholder="Befehl suchen oder mit ↑↓ stöbern…"
            spellcheck="false" autocapitalize="off" autocorrect="off" />
     <ul id="palette-list" class="palette-list"></ul>
     <div class="palette-foot">
-      <kbd>↑</kbd><kbd>↓</kbd> wählen &nbsp; <kbd>Enter</kbd> starten &nbsp; <kbd>Esc</kbd> schließen
+      <kbd>↑</kbd><kbd>↓</kbd> wählen &nbsp; <kbd>Enter</kbd> öffnen / starten &nbsp; <kbd>⌫</kbd> Ebene zurück &nbsp; <kbd>Esc</kbd> schließen
     </div>
   </div>
 </div>

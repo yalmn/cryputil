@@ -243,6 +243,14 @@ kbd {
   color: var(--fg);
 }
 
+.palette-cwd {
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
+  padding: 0 0 4px;
+}
+.palette-cwd .crumb-here { color: var(--fg-bright); }
+
 #palette-input {
   width: 100%;
   background: transparent;
@@ -291,6 +299,14 @@ kbd {
   font-style: italic;
   cursor: default;
 }
+.palette-list li .palette-kind {
+  display: inline-block;
+  width: 1.4em;
+  color: var(--accent);
+}
+.palette-list li.folder .palette-kind { color: var(--fg-bright); }
+.palette-list li.up .palette-kind     { color: var(--fg-dim); }
+.palette-list li.up                   { color: var(--fg-dim); font-style: italic; }
 
 .palette-foot {
   margin-top: 8px;

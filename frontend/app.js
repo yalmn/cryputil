@@ -5,6 +5,7 @@ const breadcrumbPath = document.getElementById("breadcrumb-path");
 const palette = document.getElementById("palette");
 const paletteInput = document.getElementById("palette-input");
 const paletteList = document.getElementById("palette-list");
+const paletteCwd = document.getElementById("palette-cwd");
 
 const BANNER = [
   "                             _   _ _ ",
@@ -536,6 +537,7 @@ function showHelp() {
 }
 
 // ────────── Befehls-Palette ──────────
+// Flach gefilterter Index für Suchmodus
 function buildSearchIndex() {
   const idx = [];
   for (const [menuKey, menu] of Object.entries(MENUS)) {
@@ -543,6 +545,7 @@ function buildSearchIndex() {
     for (const item of menu.items) {
       if (!item.cmd) continue;
       idx.push({
+        kind: "cmd",
         label: item.label,
         cmd: item.cmd,
         menuKey,
@@ -555,7 +558,13 @@ function buildSearchIndex() {
 }
 
 let searchIndex = [];
-const paletteState = { open: false, results: [], selected: 0 };
+const paletteState = {
+  open: false,
+  results: [],
+  selected: 0,
+  cwd: "main",      // aktueller Ordner im Browse-Modus
+  mode: "browse",   // "browse" | "search"
+};
 
 function abortPending() {
   state.pending = null;
@@ -568,6 +577,7 @@ function openPalette() {
   palette.classList.remove("hidden");
   palette.setAttribute("aria-hidden", "false");
   paletteInput.value = "";
+  paletteState.cwd = "main";
   refreshPalette("");
   setTimeout(() => paletteInput.focus(), 0);
 }
@@ -581,7 +591,6 @@ function closePalette() {
 }
 
 function fuzzyMatch(haystack, needle) {
-  // einfache Subsequenz-Suche mit Score: niedriger Index + dichte Treffer = besser
   haystack = haystack.toLowerCase();
   needle = needle.toLowerCase().trim();
   if (!needle) return 0;
@@ -597,13 +606,41 @@ function fuzzyMatch(haystack, needle) {
   return score;
 }
 
+// Einträge für einen Ordner: erst "..", dann Unterordner, dann Befehle.
+function browseEntries(menuKey) {
+  const menu = MENUS[menuKey];
+  if (!menu) return [];
+  const out = [];
+  if (menuKey !== "main") {
+    out.push({ kind: "up", label: ".. (Ebene zurück)" });
+  }
+  for (const item of menu.items) {
+    if (item.goto) {
+      out.push({ kind: "folder", label: item.label, target: item.goto });
+    } else if (item.action) {
+      out.push({ kind: "action", label: item.label, action: item.action });
+    } else if (item.cmd) {
+      out.push({
+        kind: "cmd",
+        label: item.label,
+        cmd: item.cmd,
+        menuKey,
+        menuTitle: menu.title,
+        item,
+      });
+    }
+  }
+  return out;
+}
+
 function refreshPalette(query) {
   const q = query.trim();
-  let results;
   if (!q) {
-    results = searchIndex.slice(0, 30);
+    paletteState.mode = "browse";
+    paletteState.results = browseEntries(paletteState.cwd);
   } else {
-    results = searchIndex
+    paletteState.mode = "search";
+    paletteState.results = searchIndex
       .map((it) => {
         const sLabel = fuzzyMatch(it.label, q);
         const sCmd = fuzzyMatch(it.cmd, q);
@@ -617,9 +654,32 @@ function refreshPalette(query) {
       .slice(0, 30)
       .map((r) => r.it);
   }
-  paletteState.results = results;
   paletteState.selected = 0;
+  updatePaletteCwd();
   renderPalette();
+}
+
+function updatePaletteCwd() {
+  const trail = ["cryputil"];
+  if (paletteState.cwd !== "main") trail.push(MENUS[paletteState.cwd]?.title ?? paletteState.cwd);
+  paletteCwd.innerHTML =
+    (paletteState.mode === "search" ? "Suche in allen Befehlen" : "") +
+    (paletteState.mode === "browse"
+      ? trail
+          .map((p, i) =>
+            i === trail.length - 1
+              ? `<span class="crumb-here">${escapeHtml(p)}</span>`
+              : escapeHtml(p)
+          )
+          .join(" ▸ ")
+      : "");
+}
+
+function kindGlyph(kind) {
+  if (kind === "folder") return "📁";
+  if (kind === "up") return "↩";
+  if (kind === "action") return "✦";
+  return "›";
 }
 
 function renderPalette() {
@@ -633,18 +693,34 @@ function renderPalette() {
   }
   paletteState.results.forEach((it, i) => {
     const li = document.createElement("li");
-    if (i === paletteState.selected) li.className = "active";
+    const classes = [];
+    if (i === paletteState.selected) classes.push("active");
+    if (it.kind === "folder") classes.push("folder");
+    if (it.kind === "up") classes.push("up");
+    li.className = classes.join(" ");
+
+    const kind = document.createElement("span");
+    kind.className = "palette-kind";
+    kind.textContent = kindGlyph(it.kind);
+    li.appendChild(kind);
+
     const label = document.createElement("span");
     label.textContent = it.label;
-    const path = document.createElement("span");
-    path.className = "palette-path";
-    path.textContent = "  ▸ " + it.menuTitle;
-    const cmd = document.createElement("span");
-    cmd.className = "palette-cmd";
-    cmd.textContent = it.cmd;
     li.appendChild(label);
-    li.appendChild(path);
-    li.appendChild(cmd);
+
+    if (it.kind === "cmd" && paletteState.mode === "search") {
+      const path = document.createElement("span");
+      path.className = "palette-path";
+      path.textContent = "  ▸ " + it.menuTitle;
+      li.appendChild(path);
+    }
+    if (it.kind === "cmd") {
+      const cmd = document.createElement("span");
+      cmd.className = "palette-cmd";
+      cmd.textContent = it.cmd;
+      li.appendChild(cmd);
+    }
+
     li.addEventListener("click", () => {
       paletteState.selected = i;
       runPaletteSelection();
@@ -663,9 +739,43 @@ function movePaletteSelection(delta) {
   if (active) active.scrollIntoView({ block: "nearest" });
 }
 
+function paletteGoUp() {
+  if (paletteState.mode === "search") {
+    paletteInput.value = "";
+    refreshPalette("");
+    return;
+  }
+  if (paletteState.cwd !== "main") {
+    paletteState.cwd = "main";
+    refreshPalette("");
+  }
+}
+
 function runPaletteSelection() {
   const pick = paletteState.results[paletteState.selected];
   if (!pick) return;
+
+  if (pick.kind === "up") {
+    paletteGoUp();
+    return;
+  }
+  if (pick.kind === "folder") {
+    paletteState.cwd = pick.target;
+    paletteInput.value = "";
+    refreshPalette("");
+    return;
+  }
+  if (pick.kind === "action") {
+    closePalette();
+    if (pick.action === "showLast") {
+      if (lastTrace) renderFull(lastTrace);
+      else append("Keine vorherige Berechnung.", "warn");
+      showMenu(state.menu);
+    }
+    return;
+  }
+
+  // cmd
   closePalette();
   abortPending();
   state.menu = pick.menuKey;
@@ -806,6 +916,9 @@ function onPaletteKeydown(e) {
     e.preventDefault();
   } else if (e.key === "Enter") {
     runPaletteSelection();
+    e.preventDefault();
+  } else if (e.key === "Backspace" && !paletteInput.value) {
+    paletteGoUp();
     e.preventDefault();
   }
 }
