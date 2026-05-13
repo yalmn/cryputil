@@ -1,6 +1,12 @@
 const term = document.getElementById("terminal");
 const form = document.getElementById("prompt-form");
 const input = document.getElementById("prompt-input");
+const breadcrumbPath = document.getElementById("breadcrumb-path");
+const palette = document.getElementById("palette");
+const paletteInput = document.getElementById("palette-input");
+const paletteList = document.getElementById("palette-list");
+const paletteCwd = document.getElementById("palette-cwd");
+const paletteInfo = document.getElementById("palette-info");
 
 const BANNER = [
   "                             _   _ _ ",
@@ -209,18 +215,64 @@ function append(text, cls = "line") {
   el.textContent = text;
   term.appendChild(el);
   term.scrollTop = term.scrollHeight;
+  return el;
+}
+
+function appendHtml(html, cls = "line") {
+  const el = document.createElement("div");
+  el.className = cls;
+  el.innerHTML = html;
+  term.appendChild(el);
+  term.scrollTop = term.scrollHeight;
+  return el;
 }
 
 function clearTerminal() {
   term.innerHTML = "";
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Hebt Mathe-Operatoren in einer (schon escapten) Step-Zeile hervor.
+function highlightMath(escaped) {
+  const tokens = [
+    "\\bmod\\b", "\\bgcd\\b", "\\blcm\\b",
+    "≡", "⁻¹", "²", "³", "λ", "μ", "≠", "→", "·"
+  ];
+  const re = new RegExp("(" + tokens.join("|") + ")", "g");
+  return escaped.replace(re, '<span class="op">$1</span>');
+}
+
+function divider(label) {
+  const line = "──── " + label + " " + "─".repeat(Math.max(0, 58 - label.length));
+  appendHtml(
+    `<span class="section-divider">${escapeHtml(line.slice(0, 5))}</span>` +
+    `<span class="section-title">${escapeHtml(label)}</span> ` +
+    `<span class="section-divider">${escapeHtml(line.slice(5 + label.length + 1))}</span>`,
+    "section-header"
+  );
+}
+
+function setBreadcrumb(name) {
+  const trail = ["cryputil"];
+  if (name !== "main") trail.push(MENUS[name]?.title ?? name);
+  breadcrumbPath.textContent = trail.join(" ▸ ");
+}
+
 function showMenu(name) {
   state.mode = "menu";
   state.menu = name;
+  setBreadcrumb(name);
   const menu = MENUS[name];
   append("");
-  append(menu.title, "info");
+  append(menu.title, "section-title");
   menu.items.forEach((it, i) => append(`${i + 1}) ${it.label}`));
   append(`0) ${menu.backLabel ?? "Zurück"}`);
 }
@@ -381,39 +433,87 @@ function pad(s, w) {
 
 function renderTable(table, indent) {
   const widths = columnWidths(table);
-  append(indent + table.headers.map((h, i) => pad(h, widths[i])).join(" | "));
-  append(indent + widths.map((w) => "-".repeat(w)).join("-+-"));
-  for (const row of table.rows) {
-    append(indent + row.map((c, i) => pad(c, widths[i] ?? 0)).join(" | "));
-  }
+  const inner = widths.map((w) => "─".repeat(w + 2));
+  const top    = indent + "┌" + inner.join("┬") + "┐";
+  const mid    = indent + "├" + inner.join("┼") + "┤";
+  const bottom = indent + "└" + inner.join("┴") + "┘";
+  const cell = (s, w) => " " + pad(s, w) + " ";
+
+  appendHtml(`<span class="table-border">${escapeHtml(top)}</span>`);
+  appendHtml(
+    `<span class="table-border">${escapeHtml(indent + "│")}</span>` +
+    table.headers
+      .map((h, i) => `<span class="table-header">${escapeHtml(cell(h, widths[i]))}</span>` +
+                     `<span class="table-border">│</span>`)
+      .join("")
+  );
+  appendHtml(`<span class="table-border">${escapeHtml(mid)}</span>`);
+  table.rows.forEach((row, ri) => {
+    const cls = "table-row " + (ri % 2 === 0 ? "even" : "odd");
+    appendHtml(
+      `<span class="table-border">${escapeHtml(indent + "│")}</span>` +
+      row.map((c, i) =>
+        `${escapeHtml(cell(c, widths[i] ?? 0))}<span class="table-border">│</span>`
+      ).join(""),
+      cls
+    );
+  });
+  appendHtml(`<span class="table-border">${escapeHtml(bottom)}</span>`);
+}
+
+function renderInputRow(k, v) {
+  appendHtml(
+    `<span class="arrow">▸</span><span class="key">${escapeHtml(k)}</span> = ${escapeHtml(v)}`,
+    "input-row"
+  );
+}
+
+function renderResultRow(k, v) {
+  appendHtml(
+    `<span class="star">★</span>${escapeHtml(k)} = <strong>${escapeHtml(v)}</strong>`,
+    "result-row"
+  );
+}
+
+function renderStepHeader(num, title) {
+  appendHtml(
+    `<span class="badge">[${escapeHtml(String(num))}]</span>` +
+    `<span class="step-title">${escapeHtml(title)}</span>`,
+    "step-header"
+  );
+}
+
+function renderStepLine(text) {
+  const safe = highlightMath(escapeHtml(text));
+  appendHtml(`    ${safe}`, "step-line");
 }
 
 function renderSummary(trace) {
   append("");
-  append(`Algorithmus: ${trace.algorithm}`, "info");
+  appendHtml(`Algorithmus: ${escapeHtml(trace.algorithm)}`, "algo-title");
   if (trace.result && trace.result.length) {
     append("");
-    append("Ergebnis:", "info");
-    for (const [k, v] of trace.result) append(`  ${k} = ${v}`);
+    divider("Ergebnis");
+    for (const [k, v] of trace.result) renderResultRow(k, v);
   }
   append("");
 }
 
 function renderFull(trace) {
   append("");
-  append(`Algorithmus: ${trace.algorithm}`, "info");
+  appendHtml(`Algorithmus: ${escapeHtml(trace.algorithm)}`, "algo-title");
   if (trace.inputs && trace.inputs.length) {
     append("");
-    append("Eingaben:", "info");
-    for (const [k, v] of trace.inputs) append(`  ${k} = ${v}`);
+    divider("Eingaben");
+    for (const [k, v] of trace.inputs) renderInputRow(k, v);
   }
   if (trace.steps && trace.steps.length) {
     append("");
-    append("Schritte:", "info");
+    divider("Schritte");
     for (const step of trace.steps) {
       append("");
-      append(`[${step.number}] ${step.title}`, "info");
-      for (const ln of step.lines || []) append(`    ${ln}`);
+      renderStepHeader(step.number, step.title);
+      for (const ln of step.lines || []) renderStepLine(ln);
       if (step.table) {
         append("");
         renderTable(step.table, "    ");
@@ -422,8 +522,8 @@ function renderFull(trace) {
   }
   if (trace.result && trace.result.length) {
     append("");
-    append("Ergebnis:", "info");
-    for (const [k, v] of trace.result) append(`  ${k} = ${v}`);
+    divider("Ergebnis");
+    for (const [k, v] of trace.result) renderResultRow(k, v);
   }
   append("");
 }
@@ -433,7 +533,376 @@ function showHelp() {
   append("  Auswahl per Nummer, 0 für Zurück bzw. Beenden.", "info");
   append("  Parameter werden einzeln abgefragt; ungültige Werte werden erneut erfragt.", "info");
   append("  Nach jedem Ergebnis wird gefragt, ob alle Schritte angezeigt werden sollen.", "info");
+  append("  Shortcuts: [/] Suche  [Esc] Zurück  [Ctrl+L] Clear", "info");
   append("  Sonderbefehle: help, clear, menu, version", "info");
+}
+
+// ────────── Beschreibungen für die Palette ──────────
+const FOLDER_DESCRIPTIONS = {
+  modulo: "Grundoperationen der Modulo-Arithmetik: Addition, Multiplikation, schnelle Exponentiation, Inverse und zyklische Gruppen. Bausteine für fast alle anderen Verfahren.",
+  crypto: "Vollständige Kryptoverfahren: RSA, Diffie-Hellman, ElGamal, ECC, Paillier, Shamir Three-Pass, Substitution und Caesar – jeweils mit Schritt-für-Schritt-Trace.",
+  ident: "Identifikations- und Zero-Knowledge-Protokolle. Hier: Fiat-Shamir (eine Runde) mit Commitment, Challenge und Response.",
+  analyse: "Kryptoanalyse-Werkzeuge: Baby-Step-Giant-Step, Pollard-Rho (Faktorisierung & DLog), Fermat, Spaltentransposition und Häufigkeitsanalyse.",
+  playbooks: "Aufgaben-orientierte Abläufe (z. B. „aus Mitschnitt → privater Schlüssel“). Kombinieren mehrere Schritte zu einem geführten Lösungsweg.",
+};
+
+const CMD_DESCRIPTIONS = {
+  // Modulo
+  "mod.add":  "Berechnet (a + b) mod n und zeigt die Normalisierung mit rem_euclid.",
+  "mod.sub":  "Berechnet (a − b) mod n. Negative Zwischenergebnisse werden korrekt normalisiert.",
+  "mod.mul":  "Berechnet (a · b) mod n; nützlich als Baustein für RSA, ElGamal etc.",
+  "mod.pow": "Schnelle modulare Exponentiation a^e mod n nach dem Square-and-Multiply-Verfahren.",
+  "mod.inv_add": "Additives Inverses von a modulo n: das x mit (a + x) ≡ 0 (mod n).",
+  "mod.inv_mul": "Multiplikatives Inverses via erweitertem Euklidischen Algorithmus. Existiert genau dann, wenn gcd(a, n) = 1.",
+  "mod.subgroup": "Erzeugt die von g erzeugte zyklische Untergruppe in (Z/pZ)* und ermittelt deren Ordnung.",
+  "mod.primitive_roots": "Listet alle primitiven Wurzeln modulo p (Erzeuger der vollen multiplikativen Gruppe).",
+  // Crypto
+  "rsa.keygen":  "RSA-Schlüsselerzeugung aus zwei Primzahlen p, q und öffentlichem Exponenten e. Liefert n, φ(n) und privaten Schlüssel d.",
+  "rsa.encrypt": "RSA-Verschlüsselung: c = m^e mod n.",
+  "rsa.decrypt": "RSA-Entschlüsselung: m = c^d mod n.",
+  "dh.exchange": "Diffie-Hellman-Schlüsselaustausch mit Generator g, Modul p und privaten Werten a, b. Zeigt beide Sichten und den gemeinsamen Schlüssel.",
+  "elgamal.encrypt": "ElGamal-Verschlüsselung im (Z/pZ)*: (c1, c2) = (g^k, m · e^k) mod p.",
+  "elgamal.decrypt": "ElGamal-Entschlüsselung: m = c2 · (c1^x)^(−1) mod p.",
+  "shamir.three_pass": "Shamir Three-Pass-Protokoll: Nachricht m wird ohne vorher ausgetauschten Schlüssel zwischen Alice und Bob übertragen.",
+  "ecc.add":    "Punktaddition P + Q auf der elliptischen Kurve y² = x³ + ax + b über F_p. Behandelt auch P = Q (Verdopplung) und O.",
+  "ecc.scalar": "Skalarmultiplikation k · P auf einer elliptischen Kurve mittels Double-and-Add.",
+  "rsa.sign":   "RSA-Signaturerzeugung: s = m^d mod n (Schulbuch-Variante ohne Padding).",
+  "rsa.verify": "RSA-Signaturverifikation: prüft m ≡ s^e (mod n).",
+  "elgamal.sign":   "ElGamal-Signaturerzeugung mit ephemerem k: (r, s) aus r = g^k mod p und s = k^(−1) · (m − d·r) mod (p−1).",
+  "elgamal.verify": "ElGamal-Signaturverifikation: prüft g^m ≡ e^r · r^s (mod p).",
+  "subst.encrypt": "Monoalphabetische Substitution: Klartext-Buchstaben werden über eine Permutation auf den Schlüsselalphabet abgebildet.",
+  "subst.decrypt": "Inverse Substitution mit dem gegebenen Schlüssel.",
+  "paillier.keygen":  "Paillier-Schlüsselerzeugung aus p, q. Bestimmt n = p·q, λ = lcm(p−1, q−1), wählt g und berechnet μ.",
+  "paillier.encrypt": "Paillier-Verschlüsselung: c = g^m · r^n mod n². Additiv homomorph.",
+  "paillier.decrypt": "Paillier-Entschlüsselung mit λ, μ: m = L(c^λ mod n²) · μ mod n.",
+  "caesar.encrypt": "Caesar-Chiffre: jeder Buchstabe wird um k Stellen nach rechts verschoben. Erhält Groß-/Kleinschreibung und Satzzeichen.",
+  "caesar.decrypt": "Caesar-Entschlüsselung: verschiebt jeden Buchstaben um k Stellen nach links (= Verschlüsselung mit −k).",
+  // Ident
+  "fiat_shamir.round": "Eine Runde des Fiat-Shamir-Identifikationsprotokolls: Commitment x = k² mod n, Challenge e ∈ {0,1}, Response y.",
+  // Analyse
+  "bsgs": "Baby-Step-Giant-Step: löst diskreten Logarithmus h = g^x mod p in O(√p) mit Lookup-Tabelle.",
+  "pollard_rho.factor": "Pollard-Rho-Faktorisierung: findet einen nicht-trivialen Faktor von n via Zyklus-Suche auf einer Pseudo-Zufallsfolge.",
+  "pollard_rho.dlog":   "Pollard-Rho für diskrete Logarithmen mit drei Partitionen und Floyd-Zyklus-Erkennung.",
+  "fermat.factor": "Fermat-Faktorisierung: sucht n = a² − b² = (a−b)(a+b). Effizient, wenn die Faktoren nahe beieinander liegen.",
+  "transposition.decrypt": "Versucht mehrere Schlüssellängen für eine Spaltentransposition und zeigt die plausibelsten Entschlüsselungen.",
+  "freq.analyze": "Buchstaben-Häufigkeitsanalyse: vergleicht beobachtete Häufigkeiten mit der erwarteten Verteilung der gewählten Sprache.",
+  // Playbooks
+  "pb.elgamal_mult_homomorph": "Demonstriert die multiplikative Homomorphismus-Eigenschaft von ElGamal anhand zweier Chiffrate.",
+  "pb.rsa_priv_from_pub_y":    "Aufgabe: aus (n, e) und einem Geheimtext y den privaten Schlüssel d und den Klartext x bestimmen.",
+  "pb.dh_k_from_g_p_alpha_beta": "Aufgabe: aus g, p sowie den öffentlichen Werten α, β den gemeinsamen DH-Schlüssel K rekonstruieren.",
+  "pb.elgamal_d_from_kpub":    "Aufgabe: aus dem öffentlichen ElGamal-Schlüssel (p, g, e) den privaten Schlüssel d via DLog ermitteln.",
+  "pb.rsa_check_d":            "Verifiziert, ob ein gegebener privater Schlüssel d zu (n, e) passt — optional mit Round-Trip-Test.",
+  "pb.elgamal_sig_verify":     "Geführte Verifikation einer ElGamal-Signatur (m, r, s) gegen Kpub = (p, g, e).",
+  "pb.rsa_pcap_decrypt":       "Klassische Klausuraufgabe: aus (n, e) und y (z. B. aus pcap) den Klartext bestimmen.",
+  "pb.elgamal_pcap_decrypt":   "Aus ElGamal-Kpub und mitgeschnittenem (a, b) den Klartext m rekonstruieren.",
+  "pb.dh_pcap_shared":         "Aus Mitschnitt-Werten (p, g, α, β) den gemeinsamen DH-Schlüssel ableiten; optional Geheimtext entschlüsseln.",
+  "pb.paillier_add_homomorph": "Zeigt die additive Homomorphismus-Eigenschaft von Paillier: E(m1) · E(m2) entschlüsselt zu m1 + m2 mod n.",
+};
+
+function describeEntry(entry) {
+  if (!entry) return null;
+  if (entry.kind === "up") {
+    return { title: "Eine Ebene zurück", body: "Springt im Browse-Modus zurück zur übergeordneten Kategorie." };
+  }
+  if (entry.kind === "folder") {
+    return {
+      title: entry.label,
+      body: FOLDER_DESCRIPTIONS[entry.target] ?? "Untermenü mit weiteren Befehlen.",
+    };
+  }
+  if (entry.kind === "action") {
+    if (entry.action === "showLast") {
+      return { title: entry.label, body: "Zeigt alle Schritte und Tabellen der letzten ausgeführten Berechnung erneut an." };
+    }
+    return { title: entry.label, body: "" };
+  }
+  if (entry.kind === "cmd") {
+    return {
+      title: entry.label,
+      cmd: entry.cmd,
+      menuTitle: entry.menuTitle,
+      body: CMD_DESCRIPTIONS[entry.cmd] ?? "Kein Beschreibungstext hinterlegt.",
+    };
+  }
+  return null;
+}
+
+function updatePaletteInfo() {
+  if (!paletteInfo) return;
+  const entry = paletteState.results[paletteState.selected];
+  const info = describeEntry(entry);
+  if (!info) {
+    paletteInfo.innerHTML = `<div class="palette-info-empty">Eintrag wählen, um eine Erklärung zu sehen…</div>`;
+    return;
+  }
+  let html = `<h4>${escapeHtml(info.title)}</h4>`;
+  if (info.cmd) html += `<span class="palette-info-cmd">${escapeHtml(info.cmd)}</span>`;
+  if (info.body) html += `<p>${escapeHtml(info.body)}</p>`;
+  if (info.menuTitle) html += `<div class="palette-info-meta">Kategorie: ${escapeHtml(info.menuTitle)}</div>`;
+  paletteInfo.innerHTML = html;
+}
+
+// ────────── Befehls-Palette ──────────
+// Flach gefilterter Index für Suchmodus
+function buildSearchIndex() {
+  const idx = [];
+  for (const [menuKey, menu] of Object.entries(MENUS)) {
+    if (menuKey === "main") continue;
+    for (const item of menu.items) {
+      if (!item.cmd) continue;
+      idx.push({
+        kind: "cmd",
+        label: item.label,
+        cmd: item.cmd,
+        menuKey,
+        menuTitle: menu.title,
+        item,
+      });
+    }
+  }
+  return idx;
+}
+
+let searchIndex = [];
+const paletteState = {
+  open: false,
+  results: [],
+  selected: 0,
+  cwd: "main",      // aktueller Ordner im Browse-Modus
+  mode: "browse",   // "browse" | "search"
+};
+
+function abortPending() {
+  state.pending = null;
+  state.mode = "menu";
+}
+
+function openPalette() {
+  if (paletteState.open) return;
+  paletteState.open = true;
+  palette.classList.remove("hidden");
+  palette.setAttribute("aria-hidden", "false");
+  paletteInput.value = "";
+  paletteState.cwd = "main";
+  refreshPalette("");
+  setTimeout(() => paletteInput.focus(), 0);
+}
+
+function closePalette() {
+  if (!paletteState.open) return;
+  paletteState.open = false;
+  palette.classList.add("hidden");
+  palette.setAttribute("aria-hidden", "true");
+  input.focus();
+}
+
+function fuzzyMatch(haystack, needle) {
+  haystack = haystack.toLowerCase();
+  needle = needle.toLowerCase().trim();
+  if (!needle) return 0;
+  let hi = 0, score = 0, lastMatch = -1;
+  for (const ch of needle) {
+    const found = haystack.indexOf(ch, hi);
+    if (found < 0) return -1;
+    score += found - hi;
+    if (lastMatch >= 0 && found === lastMatch + 1) score -= 2;
+    lastMatch = found;
+    hi = found + 1;
+  }
+  return score;
+}
+
+// Einträge für einen Ordner: erst "..", dann Unterordner, dann Befehle.
+function browseEntries(menuKey) {
+  const menu = MENUS[menuKey];
+  if (!menu) return [];
+  const out = [];
+  if (menuKey !== "main") {
+    out.push({ kind: "up", label: ".. (Ebene zurück)" });
+  }
+  for (const item of menu.items) {
+    if (item.goto) {
+      out.push({ kind: "folder", label: item.label, target: item.goto });
+    } else if (item.action) {
+      out.push({ kind: "action", label: item.label, action: item.action });
+    } else if (item.cmd) {
+      out.push({
+        kind: "cmd",
+        label: item.label,
+        cmd: item.cmd,
+        menuKey,
+        menuTitle: menu.title,
+        item,
+      });
+    }
+  }
+  return out;
+}
+
+function refreshPalette(query) {
+  const q = query.trim();
+  if (!q) {
+    paletteState.mode = "browse";
+    paletteState.results = browseEntries(paletteState.cwd);
+  } else {
+    paletteState.mode = "search";
+    paletteState.results = searchIndex
+      .map((it) => {
+        const sLabel = fuzzyMatch(it.label, q);
+        const sCmd = fuzzyMatch(it.cmd, q);
+        const sMenu = fuzzyMatch(it.menuTitle, q);
+        const candidates = [sLabel, sCmd, sMenu].filter((s) => s >= 0);
+        if (!candidates.length) return null;
+        return { it, score: Math.min(...candidates) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 30)
+      .map((r) => r.it);
+  }
+  paletteState.selected = 0;
+  updatePaletteCwd();
+  renderPalette();
+}
+
+function updatePaletteCwd() {
+  const trail = ["cryputil"];
+  if (paletteState.cwd !== "main") trail.push(MENUS[paletteState.cwd]?.title ?? paletteState.cwd);
+  paletteCwd.innerHTML =
+    (paletteState.mode === "search" ? "Suche in allen Befehlen" : "") +
+    (paletteState.mode === "browse"
+      ? trail
+          .map((p, i) =>
+            i === trail.length - 1
+              ? `<span class="crumb-here">${escapeHtml(p)}</span>`
+              : escapeHtml(p)
+          )
+          .join(" ▸ ")
+      : "");
+}
+
+function kindGlyph(kind) {
+  if (kind === "folder") return "📁";
+  if (kind === "up") return "↩";
+  if (kind === "action") return "✦";
+  return "›";
+}
+
+function renderPalette() {
+  paletteList.innerHTML = "";
+  if (!paletteState.results.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "Keine Treffer";
+    paletteList.appendChild(li);
+    updatePaletteInfo();
+    return;
+  }
+  paletteState.results.forEach((it, i) => {
+    const li = document.createElement("li");
+    const classes = [];
+    if (i === paletteState.selected) classes.push("active");
+    if (it.kind === "folder") classes.push("folder");
+    if (it.kind === "up") classes.push("up");
+    li.className = classes.join(" ");
+
+    const kind = document.createElement("span");
+    kind.className = "palette-kind";
+    kind.textContent = kindGlyph(it.kind);
+    li.appendChild(kind);
+
+    const label = document.createElement("span");
+    label.textContent = it.label;
+    li.appendChild(label);
+
+    if (it.kind === "cmd" && paletteState.mode === "search") {
+      const path = document.createElement("span");
+      path.className = "palette-path";
+      path.textContent = "  ▸ " + it.menuTitle;
+      li.appendChild(path);
+    }
+    if (it.kind === "cmd") {
+      const cmd = document.createElement("span");
+      cmd.className = "palette-cmd";
+      cmd.textContent = it.cmd;
+      li.appendChild(cmd);
+    }
+
+    li.addEventListener("click", () => {
+      paletteState.selected = i;
+      runPaletteSelection();
+    });
+    li.addEventListener("mouseenter", () => {
+      paletteState.selected = i;
+      paletteList.querySelectorAll("li.active").forEach((el) => el.classList.remove("active"));
+      li.classList.add("active");
+      updatePaletteInfo();
+    });
+    paletteList.appendChild(li);
+  });
+  updatePaletteInfo();
+}
+
+function movePaletteSelection(delta) {
+  if (!paletteState.results.length) return;
+  paletteState.selected =
+    (paletteState.selected + delta + paletteState.results.length) %
+    paletteState.results.length;
+  renderPalette();
+  const active = paletteList.querySelector("li.active");
+  if (active) active.scrollIntoView({ block: "nearest" });
+}
+
+function paletteGoUp() {
+  if (paletteState.mode === "search") {
+    paletteInput.value = "";
+    refreshPalette("");
+    return;
+  }
+  if (paletteState.cwd !== "main") {
+    paletteState.cwd = "main";
+    refreshPalette("");
+  }
+}
+
+function runPaletteSelection() {
+  const pick = paletteState.results[paletteState.selected];
+  if (!pick) return;
+
+  if (pick.kind === "up") {
+    paletteGoUp();
+    return;
+  }
+  if (pick.kind === "folder") {
+    paletteState.cwd = pick.target;
+    paletteInput.value = "";
+    refreshPalette("");
+    return;
+  }
+  if (pick.kind === "action") {
+    closePalette();
+    if (pick.action === "showLast") {
+      if (lastTrace) renderFull(lastTrace);
+      else append("Keine vorherige Berechnung.", "warn");
+      showMenu(state.menu);
+    }
+    return;
+  }
+
+  // cmd
+  closePalette();
+  abortPending();
+  state.menu = pick.menuKey;
+  setBreadcrumb(pick.menuKey);
+  append("");
+  append(`> ${pick.menuTitle} / ${pick.label}`, "echo");
+  const itemCopy = { ...pick.item, steps: [...(pick.item.steps || [])] };
+  if (!itemCopy.steps.length) {
+    state.pending = { item: itemCopy, values: {}, idx: 0 };
+    runCommand();
+  } else {
+    startCollecting(itemCopy);
+  }
 }
 
 function handleMenuSelection(value) {
@@ -529,13 +998,58 @@ function onKeydown(e) {
   } else if (e.key === "l" && (e.ctrlKey || e.metaKey)) {
     clearTerminal();
     e.preventDefault();
+  } else if (e.key === "Escape") {
+    if (state.mode === "menu") {
+      if (state.menu !== "main") {
+        showMenu("main");
+      }
+    } else {
+      abortPending();
+      append("  (abgebrochen)", "warn");
+      showMenu(state.menu);
+    }
+    e.preventDefault();
+  } else if (e.key === "/" && !input.value && state.mode === "menu") {
+    openPalette();
+    e.preventDefault();
+  } else if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
+    openPalette();
+    e.preventDefault();
+  }
+}
+
+function onPaletteKeydown(e) {
+  if (e.key === "Escape") {
+    closePalette();
+    e.preventDefault();
+  } else if (e.key === "ArrowDown") {
+    movePaletteSelection(1);
+    e.preventDefault();
+  } else if (e.key === "ArrowUp") {
+    movePaletteSelection(-1);
+    e.preventDefault();
+  } else if (e.key === "Enter") {
+    runPaletteSelection();
+    e.preventDefault();
+  } else if (e.key === "Backspace" && !paletteInput.value) {
+    paletteGoUp();
+    e.preventDefault();
   }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   append(BANNER, "ascii");
   loadWasm();
+  searchIndex = buildSearchIndex();
+  setBreadcrumb("main");
   form.addEventListener("submit", onSubmit);
   input.addEventListener("keydown", onKeydown);
-  document.addEventListener("click", () => input.focus());
+  paletteInput.addEventListener("input", (e) => refreshPalette(e.target.value));
+  paletteInput.addEventListener("keydown", onPaletteKeydown);
+  palette.addEventListener("click", (e) => { if (e.target === palette) closePalette(); });
+  document.addEventListener("click", (e) => {
+    if (paletteState.open) return;
+    if (e.target.closest(".palette-box")) return;
+    input.focus();
+  });
 });
