@@ -6,6 +6,7 @@ const palette = document.getElementById("palette");
 const paletteInput = document.getElementById("palette-input");
 const paletteList = document.getElementById("palette-list");
 const paletteCwd = document.getElementById("palette-cwd");
+const paletteInfo = document.getElementById("palette-info");
 
 const BANNER = [
   "                             _   _ _ ",
@@ -536,6 +537,111 @@ function showHelp() {
   append("  Sonderbefehle: help, clear, menu, version", "info");
 }
 
+// ────────── Beschreibungen für die Palette ──────────
+const FOLDER_DESCRIPTIONS = {
+  modulo: "Grundoperationen der Modulo-Arithmetik: Addition, Multiplikation, schnelle Exponentiation, Inverse und zyklische Gruppen. Bausteine für fast alle anderen Verfahren.",
+  crypto: "Vollständige Kryptoverfahren: RSA, Diffie-Hellman, ElGamal, ECC, Paillier, Shamir Three-Pass, Substitution und Caesar – jeweils mit Schritt-für-Schritt-Trace.",
+  ident: "Identifikations- und Zero-Knowledge-Protokolle. Hier: Fiat-Shamir (eine Runde) mit Commitment, Challenge und Response.",
+  analyse: "Kryptoanalyse-Werkzeuge: Baby-Step-Giant-Step, Pollard-Rho (Faktorisierung & DLog), Fermat, Spaltentransposition und Häufigkeitsanalyse.",
+  playbooks: "Aufgaben-orientierte Abläufe (z. B. „aus Mitschnitt → privater Schlüssel“). Kombinieren mehrere Schritte zu einem geführten Lösungsweg.",
+};
+
+const CMD_DESCRIPTIONS = {
+  // Modulo
+  "mod.add":  "Berechnet (a + b) mod n und zeigt die Normalisierung mit rem_euclid.",
+  "mod.sub":  "Berechnet (a − b) mod n. Negative Zwischenergebnisse werden korrekt normalisiert.",
+  "mod.mul":  "Berechnet (a · b) mod n; nützlich als Baustein für RSA, ElGamal etc.",
+  "mod.pow": "Schnelle modulare Exponentiation a^e mod n nach dem Square-and-Multiply-Verfahren.",
+  "mod.inv_add": "Additives Inverses von a modulo n: das x mit (a + x) ≡ 0 (mod n).",
+  "mod.inv_mul": "Multiplikatives Inverses via erweitertem Euklidischen Algorithmus. Existiert genau dann, wenn gcd(a, n) = 1.",
+  "mod.subgroup": "Erzeugt die von g erzeugte zyklische Untergruppe in (Z/pZ)* und ermittelt deren Ordnung.",
+  "mod.primitive_roots": "Listet alle primitiven Wurzeln modulo p (Erzeuger der vollen multiplikativen Gruppe).",
+  // Crypto
+  "rsa.keygen":  "RSA-Schlüsselerzeugung aus zwei Primzahlen p, q und öffentlichem Exponenten e. Liefert n, φ(n) und privaten Schlüssel d.",
+  "rsa.encrypt": "RSA-Verschlüsselung: c = m^e mod n.",
+  "rsa.decrypt": "RSA-Entschlüsselung: m = c^d mod n.",
+  "dh.exchange": "Diffie-Hellman-Schlüsselaustausch mit Generator g, Modul p und privaten Werten a, b. Zeigt beide Sichten und den gemeinsamen Schlüssel.",
+  "elgamal.encrypt": "ElGamal-Verschlüsselung im (Z/pZ)*: (c1, c2) = (g^k, m · e^k) mod p.",
+  "elgamal.decrypt": "ElGamal-Entschlüsselung: m = c2 · (c1^x)^(−1) mod p.",
+  "shamir.three_pass": "Shamir Three-Pass-Protokoll: Nachricht m wird ohne vorher ausgetauschten Schlüssel zwischen Alice und Bob übertragen.",
+  "ecc.add":    "Punktaddition P + Q auf der elliptischen Kurve y² = x³ + ax + b über F_p. Behandelt auch P = Q (Verdopplung) und O.",
+  "ecc.scalar": "Skalarmultiplikation k · P auf einer elliptischen Kurve mittels Double-and-Add.",
+  "rsa.sign":   "RSA-Signaturerzeugung: s = m^d mod n (Schulbuch-Variante ohne Padding).",
+  "rsa.verify": "RSA-Signaturverifikation: prüft m ≡ s^e (mod n).",
+  "elgamal.sign":   "ElGamal-Signaturerzeugung mit ephemerem k: (r, s) aus r = g^k mod p und s = k^(−1) · (m − d·r) mod (p−1).",
+  "elgamal.verify": "ElGamal-Signaturverifikation: prüft g^m ≡ e^r · r^s (mod p).",
+  "subst.encrypt": "Monoalphabetische Substitution: Klartext-Buchstaben werden über eine Permutation auf den Schlüsselalphabet abgebildet.",
+  "subst.decrypt": "Inverse Substitution mit dem gegebenen Schlüssel.",
+  "paillier.keygen":  "Paillier-Schlüsselerzeugung aus p, q. Bestimmt n = p·q, λ = lcm(p−1, q−1), wählt g und berechnet μ.",
+  "paillier.encrypt": "Paillier-Verschlüsselung: c = g^m · r^n mod n². Additiv homomorph.",
+  "paillier.decrypt": "Paillier-Entschlüsselung mit λ, μ: m = L(c^λ mod n²) · μ mod n.",
+  "caesar.encrypt": "Caesar-Chiffre: jeder Buchstabe wird um k Stellen nach rechts verschoben. Erhält Groß-/Kleinschreibung und Satzzeichen.",
+  "caesar.decrypt": "Caesar-Entschlüsselung: verschiebt jeden Buchstaben um k Stellen nach links (= Verschlüsselung mit −k).",
+  // Ident
+  "fiat_shamir.round": "Eine Runde des Fiat-Shamir-Identifikationsprotokolls: Commitment x = k² mod n, Challenge e ∈ {0,1}, Response y.",
+  // Analyse
+  "bsgs": "Baby-Step-Giant-Step: löst diskreten Logarithmus h = g^x mod p in O(√p) mit Lookup-Tabelle.",
+  "pollard_rho.factor": "Pollard-Rho-Faktorisierung: findet einen nicht-trivialen Faktor von n via Zyklus-Suche auf einer Pseudo-Zufallsfolge.",
+  "pollard_rho.dlog":   "Pollard-Rho für diskrete Logarithmen mit drei Partitionen und Floyd-Zyklus-Erkennung.",
+  "fermat.factor": "Fermat-Faktorisierung: sucht n = a² − b² = (a−b)(a+b). Effizient, wenn die Faktoren nahe beieinander liegen.",
+  "transposition.decrypt": "Versucht mehrere Schlüssellängen für eine Spaltentransposition und zeigt die plausibelsten Entschlüsselungen.",
+  "freq.analyze": "Buchstaben-Häufigkeitsanalyse: vergleicht beobachtete Häufigkeiten mit der erwarteten Verteilung der gewählten Sprache.",
+  // Playbooks
+  "pb.elgamal_mult_homomorph": "Demonstriert die multiplikative Homomorphismus-Eigenschaft von ElGamal anhand zweier Chiffrate.",
+  "pb.rsa_priv_from_pub_y":    "Aufgabe: aus (n, e) und einem Geheimtext y den privaten Schlüssel d und den Klartext x bestimmen.",
+  "pb.dh_k_from_g_p_alpha_beta": "Aufgabe: aus g, p sowie den öffentlichen Werten α, β den gemeinsamen DH-Schlüssel K rekonstruieren.",
+  "pb.elgamal_d_from_kpub":    "Aufgabe: aus dem öffentlichen ElGamal-Schlüssel (p, g, e) den privaten Schlüssel d via DLog ermitteln.",
+  "pb.rsa_check_d":            "Verifiziert, ob ein gegebener privater Schlüssel d zu (n, e) passt — optional mit Round-Trip-Test.",
+  "pb.elgamal_sig_verify":     "Geführte Verifikation einer ElGamal-Signatur (m, r, s) gegen Kpub = (p, g, e).",
+  "pb.rsa_pcap_decrypt":       "Klassische Klausuraufgabe: aus (n, e) und y (z. B. aus pcap) den Klartext bestimmen.",
+  "pb.elgamal_pcap_decrypt":   "Aus ElGamal-Kpub und mitgeschnittenem (a, b) den Klartext m rekonstruieren.",
+  "pb.dh_pcap_shared":         "Aus Mitschnitt-Werten (p, g, α, β) den gemeinsamen DH-Schlüssel ableiten; optional Geheimtext entschlüsseln.",
+  "pb.paillier_add_homomorph": "Zeigt die additive Homomorphismus-Eigenschaft von Paillier: E(m1) · E(m2) entschlüsselt zu m1 + m2 mod n.",
+};
+
+function describeEntry(entry) {
+  if (!entry) return null;
+  if (entry.kind === "up") {
+    return { title: "Eine Ebene zurück", body: "Springt im Browse-Modus zurück zur übergeordneten Kategorie." };
+  }
+  if (entry.kind === "folder") {
+    return {
+      title: entry.label,
+      body: FOLDER_DESCRIPTIONS[entry.target] ?? "Untermenü mit weiteren Befehlen.",
+    };
+  }
+  if (entry.kind === "action") {
+    if (entry.action === "showLast") {
+      return { title: entry.label, body: "Zeigt alle Schritte und Tabellen der letzten ausgeführten Berechnung erneut an." };
+    }
+    return { title: entry.label, body: "" };
+  }
+  if (entry.kind === "cmd") {
+    return {
+      title: entry.label,
+      cmd: entry.cmd,
+      menuTitle: entry.menuTitle,
+      body: CMD_DESCRIPTIONS[entry.cmd] ?? "Kein Beschreibungstext hinterlegt.",
+    };
+  }
+  return null;
+}
+
+function updatePaletteInfo() {
+  if (!paletteInfo) return;
+  const entry = paletteState.results[paletteState.selected];
+  const info = describeEntry(entry);
+  if (!info) {
+    paletteInfo.innerHTML = `<div class="palette-info-empty">Eintrag wählen, um eine Erklärung zu sehen…</div>`;
+    return;
+  }
+  let html = `<h4>${escapeHtml(info.title)}</h4>`;
+  if (info.cmd) html += `<span class="palette-info-cmd">${escapeHtml(info.cmd)}</span>`;
+  if (info.body) html += `<p>${escapeHtml(info.body)}</p>`;
+  if (info.menuTitle) html += `<div class="palette-info-meta">Kategorie: ${escapeHtml(info.menuTitle)}</div>`;
+  paletteInfo.innerHTML = html;
+}
+
 // ────────── Befehls-Palette ──────────
 // Flach gefilterter Index für Suchmodus
 function buildSearchIndex() {
@@ -689,6 +795,7 @@ function renderPalette() {
     li.className = "empty";
     li.textContent = "Keine Treffer";
     paletteList.appendChild(li);
+    updatePaletteInfo();
     return;
   }
   paletteState.results.forEach((it, i) => {
@@ -725,8 +832,15 @@ function renderPalette() {
       paletteState.selected = i;
       runPaletteSelection();
     });
+    li.addEventListener("mouseenter", () => {
+      paletteState.selected = i;
+      paletteList.querySelectorAll("li.active").forEach((el) => el.classList.remove("active"));
+      li.classList.add("active");
+      updatePaletteInfo();
+    });
     paletteList.appendChild(li);
   });
+  updatePaletteInfo();
 }
 
 function movePaletteSelection(delta) {
