@@ -4,16 +4,16 @@ use crate::core::error::{CalcError, CalcResult};
 use crate::core::math::{is_prime, isqrt, mod_pow, rem_euclid};
 use crate::core::trace::{Table, Trace};
 
-// Input: g, h, p (prim)
-// Calc:  Baby-Step-Giant-Step zur Berechnung von x mit g^x ≡ h mod p
+// Input: g, e, p (prim)
+// Calc:  Baby-Step-Giant-Step zur Berechnung von d mit g^d ≡ e mod p
 // Output: Trace
-pub fn solve(g: i128, h: i128, p: i128) -> CalcResult<Trace> {
+pub fn solve(g: i128, e: i128, p: i128) -> CalcResult<Trace> {
     if !is_prime(p) {
         return Err(CalcError::NichtPrim(p.to_string()));
     }
     let mut t = Trace::new("Baby-Step-Giant-Step");
     t.input("g", g);
-    t.input("h", h);
+    t.input("e", e);
     t.input("p", p);
 
     let s1 = t.step("Suchgrenze berechnen");
@@ -45,9 +45,9 @@ pub fn solve(g: i128, h: i128, p: i128) -> CalcResult<Trace> {
             factor
         ),
     );
-    let headers = vec!["i".into(), "h · (g^-m)^i mod p".into(), "Match j".into()];
+    let headers = vec!["i".into(), "e · (g^-m)^i mod p".into(), "Match j".into()];
     let mut rows = Vec::new();
-    let mut gamma = rem_euclid(h, p);
+    let mut gamma = rem_euclid(e, p);
     for i in 0..m {
         let m_str = baby
             .get(&gamma)
@@ -55,16 +55,16 @@ pub fn solve(g: i128, h: i128, p: i128) -> CalcResult<Trace> {
             .unwrap_or("-".into());
         rows.push(vec![i.to_string(), gamma.to_string(), m_str]);
         if let Some(&j) = baby.get(&gamma) {
-            let x = rem_euclid(i * m + j, p - 1);
+            let d = rem_euclid(i * m + j, p - 1);
             t.table(s3, Table { headers, rows });
-            t.line(s3, format!("x = i·m + j = {}·{} + {} = {}", i, m, j, x));
-            t.result("x", x);
+            t.line(s3, format!("d = i·m + j = {}·{} + {} = {}", i, m, j, d));
+            t.result("d", d);
             return Ok(t);
         }
         gamma = rem_euclid(gamma * factor, p);
     }
     t.table(s3, Table { headers, rows });
-    Err(CalcError::KeineLoesung("Kein x gefunden".into()))
+    Err(CalcError::KeineLoesung("Kein d gefunden".into()))
 }
 
 #[cfg(test)]
@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn test_bsgs() {
         let t = solve(5, 8, 23).unwrap();
-        let x: i128 = t.result[0].1.parse().unwrap();
-        assert_eq!(mod_pow(5, x, 23).unwrap(), 8);
+        let d: i128 = t.result[0].1.parse().unwrap();
+        assert_eq!(mod_pow(5, d, 23).unwrap(), 8);
     }
 }
