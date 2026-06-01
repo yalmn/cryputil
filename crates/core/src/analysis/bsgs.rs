@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::core::error::{CalcError, CalcResult};
-use crate::core::math::{is_prime, isqrt, mod_inv, mod_pow, rem_euclid};
+use crate::core::math::{is_prime, isqrt, mod_pow, rem_euclid};
 use crate::core::trace::{Table, Trace};
 
 // Input: g, h, p (prim)
@@ -33,7 +33,18 @@ pub fn solve(g: i128, h: i128, p: i128) -> CalcResult<Trace> {
     t.table(s2, Table { headers, rows });
 
     let s3 = t.step("Giant-Steps und Suche");
-    let factor = mod_inv(mod_pow(g, m, p)?, p)?;
+    let factor = mod_pow(g, m * (p - 2), p)?;
+    t.line(
+        s3,
+        format!(
+            "g^(-m) ≡ g^(m·(p-2)) mod p = {}^({}·{}) mod {} = {}",
+            g,
+            m,
+            p - 2,
+            p,
+            factor
+        ),
+    );
     let headers = vec!["i".into(), "h · (g^-m)^i mod p".into(), "Match j".into()];
     let mut rows = Vec::new();
     let mut gamma = rem_euclid(h, p);
