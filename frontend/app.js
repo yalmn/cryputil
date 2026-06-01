@@ -85,7 +85,7 @@ const MENUS = {
   analyse: {
     title: "Kryptoanalyse",
     items: [
-      { label: "Baby-Step-Giant-Step", cmd: "bsgs", steps: [I("g", "g", 2), I("h", "h", 1), I("p", "p (prim)", 2)] },
+      { label: "Baby-Step-Giant-Step", cmd: "bsgs", steps: [I("g", "g", 2), I("e", "e", 1), I("p", "p (prim)", 2)] },
       { label: "Pollard-Rho (Faktorisierung)", cmd: "pollard_rho.factor", steps: [I("n", "n", 2)] },
       { label: "Pollard-Rho (diskreter Logarithmus)", cmd: "pollard_rho.dlog", steps: [I("g", "g", 2), I("h", "h", 1), I("p", "p (prim)", 2)] },
       { label: "Fermat-Faktorisierung", cmd: "fermat.factor", steps: [I("n", "n", 3)] },

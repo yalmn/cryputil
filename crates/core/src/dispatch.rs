@@ -161,7 +161,7 @@ pub fn run(command: &str, params: &Value) -> CalcResult<Trace> {
         ),
 
         // Analyse
-        "bsgs" => bsgs::solve(pi(params, "g")?, pi(params, "h")?, pi(params, "p")?),
+        "bsgs" => bsgs::solve(pi(params, "g")?, pi(params, "e")?, pi(params, "p")?),
         "pollard_rho.factor" => pollard_rho_factor::factor(pi(params, "n")?),
         "pollard_rho.dlog" => {
             pollard_rho_dlog::solve(pi(params, "g")?, pi(params, "h")?, pi(params, "p")?)
@@ -390,7 +390,7 @@ pub fn commands() -> &'static [CommandSpec] {
         },
         CommandSpec {
             name: "bsgs",
-            params: &["g", "h", "p"],
+            params: &["g", "e", "p"],
             description: "Baby-Step-Giant-Step",
         },
         CommandSpec {

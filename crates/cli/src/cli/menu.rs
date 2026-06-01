@@ -332,9 +332,9 @@ pub fn analysis_menu() -> Option<Trace> {
     match choice.as_str() {
         "1" => {
             let g = ask_int_min("g", 2);
-            let h = ask_int_min("h", 1);
+            let e = ask_int_min("e", 1);
             let p = ask_int_min("p (prim)", 2);
-            handle(bsgs::solve(g, h, p))
+            handle(bsgs::solve(g, e, p))
         }
         "2" => {
             let n = ask_int_min("n", 2);
