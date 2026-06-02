@@ -7,14 +7,18 @@
 <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+<div id="pane-toolbar" class="pane-toolbar">
+  <span class="pane-toolbar-label">Split:</span>
+  <button type="button" id="btn-split-right" title="Aktive Pane teilen, neue Pane rechts">→ Rechts</button>
+  <button type="button" id="btn-split-left"  title="Aktive Pane teilen, neue Pane links">← Links</button>
+  <button type="button" id="btn-split-down"  title="Aktive Pane teilen, neue Pane unten">↓ Unten</button>
+  <button type="button" id="btn-split-up"    title="Aktive Pane teilen, neue Pane oben">↑ Oben</button>
+  <span class="pane-toolbar-sep"></span>
+  <button type="button" id="btn-cycle" title="Nächste Pane">↻ Nächste</button>
+  <button type="button" id="btn-zoom"  title="Pane maximieren / zurück">⛶ Zoom</button>
+  <button type="button" id="btn-close" title="Aktive Pane schließen">✕ Pane</button>
+</div>
 <div class="crt">
-  <div id="pane-toolbar" class="pane-toolbar">
-    <button type="button" id="btn-split-v" title="Vertikal teilen (neue Pane rechts)">⬌ Split</button>
-    <button type="button" id="btn-split-h" title="Horizontal teilen (neue Pane unten)">⬍ Split</button>
-    <button type="button" id="btn-cycle" title="Nächste Pane">↻ Nächste</button>
-    <button type="button" id="btn-zoom" title="Pane maximieren / zurück">⛶ Zoom</button>
-    <button type="button" id="btn-close" title="Aktive Pane schließen">✕ Pane</button>
-  </div>
   <div id="pane-root" class="pane-root"></div>
 </div>
 
@@ -23,7 +27,7 @@
     <div class="breadcrumb">
       <span class="breadcrumb-path">cryputil</span>
       <span class="breadcrumb-hint">
-        <kbd>/</kbd> Suche &nbsp; <kbd>Esc</kbd> Zurück &nbsp; <kbd>Ctrl+L</kbd> Clear &nbsp; <kbd>Ctrl+Shift+B</kbd> Split
+        <kbd>/</kbd> Suche &nbsp; <kbd>Esc</kbd> Zurück &nbsp; <kbd>Ctrl+L</kbd> Clear
       </span>
     </div>
     <div class="terminal" aria-live="polite"></div>
@@ -35,8 +39,6 @@
     </form>
   </div>
 </template>
-
-<div id="prefix-hint" class="prefix-hint">PREFIX (Ctrl+B)…</div>
 
 <div id="palette" class="palette hidden" aria-hidden="true">
   <div class="palette-box" role="dialog" aria-label="Befehls-Suche">
