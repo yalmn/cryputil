@@ -8,20 +8,35 @@
 </head>
 <body>
 <div class="crt">
-  <div id="breadcrumb" class="breadcrumb">
-    <span id="breadcrumb-path" class="breadcrumb-path">cryputil</span>
-    <span class="breadcrumb-hint">
-      <kbd>/</kbd> Suche &nbsp; <kbd>Esc</kbd> Zurück &nbsp; <kbd>Ctrl+L</kbd> Clear
-    </span>
+  <div id="pane-toolbar" class="pane-toolbar">
+    <button type="button" id="btn-split-v" title="Vertikal teilen (neue Pane rechts)">⬌ Split</button>
+    <button type="button" id="btn-split-h" title="Horizontal teilen (neue Pane unten)">⬍ Split</button>
+    <button type="button" id="btn-cycle" title="Nächste Pane">↻ Nächste</button>
+    <button type="button" id="btn-zoom" title="Pane maximieren / zurück">⛶ Zoom</button>
+    <button type="button" id="btn-close" title="Aktive Pane schließen">✕ Pane</button>
   </div>
-  <div id="terminal" class="terminal" aria-live="polite"></div>
-  <form id="prompt-form" class="prompt-line" autocomplete="off">
-    <span class="prompt">cryputil&gt;&nbsp;</span>
-    <input id="prompt-input" type="text" autofocus spellcheck="false"
-           autocapitalize="off" autocorrect="off" />
-    <span class="cursor" aria-hidden="true"></span>
-  </form>
+  <div id="pane-root" class="pane-root"></div>
 </div>
+
+<template id="pane-template">
+  <div class="pane-leaf">
+    <div class="breadcrumb">
+      <span class="breadcrumb-path">cryputil</span>
+      <span class="breadcrumb-hint">
+        <kbd>/</kbd> Suche &nbsp; <kbd>Esc</kbd> Zurück &nbsp; <kbd>Ctrl+L</kbd> Clear &nbsp; <kbd>Ctrl+Shift+B</kbd> Split
+      </span>
+    </div>
+    <div class="terminal" aria-live="polite"></div>
+    <form class="prompt-form prompt-line" autocomplete="off">
+      <span class="prompt">cryputil&gt;&nbsp;</span>
+      <input class="prompt-input" type="text" spellcheck="false"
+             autocapitalize="off" autocorrect="off" />
+      <span class="cursor" aria-hidden="true"></span>
+    </form>
+  </div>
+</template>
+
+<div id="prefix-hint" class="prefix-hint">PREFIX (Ctrl+B)…</div>
 
 <div id="palette" class="palette hidden" aria-hidden="true">
   <div class="palette-box" role="dialog" aria-label="Befehls-Suche">
