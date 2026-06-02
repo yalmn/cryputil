@@ -62,6 +62,99 @@ html, body {
   z-index: 6;
 }
 
+/* ────────── Pane Toolbar ────────── */
+.pane-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px 10px;
+  border-bottom: 1px dashed var(--fg-mute);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  z-index: 10;
+  position: relative;
+}
+.pane-toolbar button {
+  background: rgba(76, 255, 122, 0.05);
+  color: var(--fg);
+  border: 1px solid var(--fg-dim);
+  border-radius: 3px;
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.pane-toolbar button:hover {
+  background: rgba(76, 255, 122, 0.12);
+  border-color: var(--accent);
+  color: var(--fg-bright);
+}
+.pane-toolbar button:active {
+  background: rgba(158, 255, 176, 0.2);
+}
+
+/* ────────── Pane Layout (Split-View) ────────── */
+.pane-root {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.pane-split {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  gap: 6px;
+}
+.pane-split.row    { flex-direction: row; }
+.pane-split.column { flex-direction: column; }
+
+.pane-leaf {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 6px 10px;
+  overflow: hidden;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+.pane-root > .pane-leaf:only-child {
+  border-color: transparent;
+  padding: 0;
+}
+.pane-split .pane-leaf {
+  border-color: var(--fg-mute);
+}
+.pane-leaf.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(158, 255, 176, 0.35);
+}
+
+.prefix-hint {
+  position: fixed;
+  bottom: 10px;
+  right: 14px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.85em;
+  letter-spacing: 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  z-index: 1000;
+  text-shadow: 0 0 4px rgba(158, 255, 176, 0.6);
+}
+.prefix-hint.visible { opacity: 1; }
+
 /* ────────── Breadcrumb ────────── */
 .breadcrumb {
   display: flex;
@@ -195,7 +288,7 @@ kbd {
   user-select: none;
 }
 
-#prompt-input {
+.prompt-input {
   flex: 1;
   background: transparent;
   border: none;
@@ -203,6 +296,7 @@ kbd {
   color: var(--fg);
   font: inherit;
   caret-color: transparent;
+  min-width: 0;
 }
 
 .cursor {
@@ -367,4 +461,5 @@ kbd {
   .breadcrumb-hint { display: none; }
   .palette-grid { grid-template-columns: 1fr; }
   .palette-info { display: none; }
+  .pane-split.row { flex-direction: column; }
 }

@@ -1,12 +1,10 @@
-const term = document.getElementById("terminal");
-const form = document.getElementById("prompt-form");
-const input = document.getElementById("prompt-input");
-const breadcrumbPath = document.getElementById("breadcrumb-path");
+const paneRoot = document.getElementById("pane-root");
 const palette = document.getElementById("palette");
 const paletteInput = document.getElementById("palette-input");
 const paletteList = document.getElementById("palette-list");
 const paletteCwd = document.getElementById("palette-cwd");
 const paletteInfo = document.getElementById("palette-info");
+const prefixHint = document.getElementById("prefix-hint");
 
 const BANNER = [
   "                             _   _ _ ",
@@ -196,348 +194,6 @@ const MENUS = {
   },
 };
 
-const history = [];
-let historyIndex = -1;
-let busy = false;
-let wasm = null;
-let wasmError = null;
-let lastTrace = null;
-
-const state = {
-  mode: "menu", // "menu" | "collect" | "ask_show_steps" | "opt_yesno"
-  menu: "main",
-  pending: null,
-};
-
-function append(text, cls = "line") {
-  const el = document.createElement("div");
-  el.className = cls;
-  el.textContent = text;
-  term.appendChild(el);
-  term.scrollTop = term.scrollHeight;
-  return el;
-}
-
-function appendHtml(html, cls = "line") {
-  const el = document.createElement("div");
-  el.className = cls;
-  el.innerHTML = html;
-  term.appendChild(el);
-  term.scrollTop = term.scrollHeight;
-  return el;
-}
-
-function clearTerminal() {
-  term.innerHTML = "";
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-// Hebt Mathe-Operatoren in einer (schon escapten) Step-Zeile hervor.
-function highlightMath(escaped) {
-  const tokens = [
-    "\\bmod\\b", "\\bgcd\\b", "\\blcm\\b",
-    "≡", "⁻¹", "²", "³", "λ", "μ", "≠", "→", "·"
-  ];
-  const re = new RegExp("(" + tokens.join("|") + ")", "g");
-  return escaped.replace(re, '<span class="op">$1</span>');
-}
-
-function divider(label) {
-  const line = "──── " + label + " " + "─".repeat(Math.max(0, 58 - label.length));
-  appendHtml(
-    `<span class="section-divider">${escapeHtml(line.slice(0, 5))}</span>` +
-    `<span class="section-title">${escapeHtml(label)}</span> ` +
-    `<span class="section-divider">${escapeHtml(line.slice(5 + label.length + 1))}</span>`,
-    "section-header"
-  );
-}
-
-function setBreadcrumb(name) {
-  const trail = ["cryputil"];
-  if (name !== "main") trail.push(MENUS[name]?.title ?? name);
-  breadcrumbPath.textContent = trail.join(" ▸ ");
-}
-
-function showMenu(name) {
-  state.mode = "menu";
-  state.menu = name;
-  setBreadcrumb(name);
-  const menu = MENUS[name];
-  append("");
-  append(menu.title, "section-title");
-  menu.items.forEach((it, i) => append(`${i + 1}) ${it.label}`));
-  append(`0) ${menu.backLabel ?? "Zurück"}`);
-}
-
-function startCollecting(item) {
-  state.mode = "collect";
-  state.pending = { item, values: {}, idx: 0 };
-  advanceStep();
-}
-
-function advanceStep() {
-  const p = state.pending;
-  const steps = p.item.steps || [];
-  while (p.idx < steps.length) {
-    const step = steps[p.idx];
-    if (step.type === "info") {
-      append("");
-      for (const ln of step.lines) append(ln, "info");
-      p.idx++;
-      continue;
-    }
-    if (step.type === "int" || step.type === "str") {
-      promptStep(step);
-      return;
-    }
-    if (step.type === "opt_int") {
-      state.mode = "opt_yesno";
-      append(`  ${step.question} [j/n]: `, "info");
-      return;
-    }
-    p.idx++;
-  }
-  runCommand();
-}
-
-function promptStep(step) {
-  state.mode = "collect";
-  append(`  ${step.label}: `, "info");
-}
-
-function handleStepInput(value) {
-  const p = state.pending;
-  const step = p.item.steps[p.idx];
-  if (step.type === "str") {
-    p.values[step.key] = value;
-    p.idx++;
-    advanceStep();
-    return;
-  }
-  if (step.type === "int") {
-    if (!/^-?\d+$/.test(value.trim())) {
-      append("    ungültige Ganzzahl", "err");
-      promptStep(step);
-      return;
-    }
-    const v = BigInt(value.trim());
-    if (step.min !== undefined && v < BigInt(step.min)) {
-      append(`    Wert muss >= ${step.min} sein.`, "err");
-      promptStep(step);
-      return;
-    }
-    p.values[step.key] = value.trim();
-    p.idx++;
-    advanceStep();
-    return;
-  }
-}
-
-function handleOptYesNo(value) {
-  const p = state.pending;
-  const step = p.item.steps[p.idx];
-  const v = value.trim().toLowerCase();
-  if (["j", "ja", "y", "yes"].includes(v)) {
-    state.mode = "collect";
-    p.idx++;
-    p.item.steps.splice(p.idx, 0, I(step.key, step.label, step.min));
-    advanceStep();
-    return;
-  }
-  if (["n", "nein", "no"].includes(v)) {
-    state.mode = "collect";
-    p.idx++;
-    advanceStep();
-    return;
-  }
-  append("    Bitte j oder n eingeben.", "err");
-}
-
-async function runCommand() {
-  const p = state.pending;
-  const cmd = p.item.cmd;
-  const params = p.values;
-  state.pending = null;
-
-  if (!wasm) {
-    append("[error] WASM-Modul nicht geladen", "err");
-    if (wasmError) append(`        ${wasmError}`, "err");
-    showMenu(state.menu);
-    return;
-  }
-
-  busy = true;
-  try {
-    const res = wasm.run(cmd, params);
-    if (res.ok) {
-      lastTrace = res.trace;
-      renderSummary(res.trace);
-      askShowSteps();
-      busy = false;
-      return;
-    } else {
-      append("", "");
-      append(`Fehler: ${res.error}`, "err");
-      append("");
-    }
-  } catch (e) {
-    append(`Fehler: ${e.message || e}`, "err");
-  } finally {
-    busy = false;
-  }
-  showMenu(state.menu);
-}
-
-function askShowSteps() {
-  state.mode = "ask_show_steps";
-  append("  Alle Schritte anzeigen? [j/n]: ", "info");
-}
-
-function handleShowSteps(value) {
-  const v = value.trim().toLowerCase();
-  if (["j", "ja", "y", "yes"].includes(v)) {
-    renderFull(lastTrace);
-    showMenu(state.menu);
-    return;
-  }
-  if (["n", "nein", "no"].includes(v)) {
-    showMenu(state.menu);
-    return;
-  }
-  append("    Bitte j oder n eingeben.", "err");
-}
-
-function columnWidths(table) {
-  const widths = table.headers.map((h) => [...h].length);
-  for (const row of table.rows) {
-    row.forEach((cell, i) => {
-      const len = [...cell].length;
-      if (len > widths[i]) widths[i] = len;
-    });
-  }
-  return widths;
-}
-
-function pad(s, w) {
-  const len = [...s].length;
-  return s + " ".repeat(Math.max(0, w - len));
-}
-
-function renderTable(table, indent) {
-  const widths = columnWidths(table);
-  const inner = widths.map((w) => "─".repeat(w + 2));
-  const top    = indent + "┌" + inner.join("┬") + "┐";
-  const mid    = indent + "├" + inner.join("┼") + "┤";
-  const bottom = indent + "└" + inner.join("┴") + "┘";
-  const cell = (s, w) => " " + pad(s, w) + " ";
-
-  appendHtml(`<span class="table-border">${escapeHtml(top)}</span>`);
-  appendHtml(
-    `<span class="table-border">${escapeHtml(indent + "│")}</span>` +
-    table.headers
-      .map((h, i) => `<span class="table-header">${escapeHtml(cell(h, widths[i]))}</span>` +
-                     `<span class="table-border">│</span>`)
-      .join("")
-  );
-  appendHtml(`<span class="table-border">${escapeHtml(mid)}</span>`);
-  table.rows.forEach((row, ri) => {
-    const cls = "table-row " + (ri % 2 === 0 ? "even" : "odd");
-    appendHtml(
-      `<span class="table-border">${escapeHtml(indent + "│")}</span>` +
-      row.map((c, i) =>
-        `${escapeHtml(cell(c, widths[i] ?? 0))}<span class="table-border">│</span>`
-      ).join(""),
-      cls
-    );
-  });
-  appendHtml(`<span class="table-border">${escapeHtml(bottom)}</span>`);
-}
-
-function renderInputRow(k, v) {
-  appendHtml(
-    `<span class="arrow">▸</span><span class="key">${escapeHtml(k)}</span> = ${escapeHtml(v)}`,
-    "input-row"
-  );
-}
-
-function renderResultRow(k, v) {
-  appendHtml(
-    `<span class="star">★</span>${escapeHtml(k)} = <strong>${escapeHtml(v)}</strong>`,
-    "result-row"
-  );
-}
-
-function renderStepHeader(num, title) {
-  appendHtml(
-    `<span class="badge">[${escapeHtml(String(num))}]</span>` +
-    `<span class="step-title">${escapeHtml(title)}</span>`,
-    "step-header"
-  );
-}
-
-function renderStepLine(text) {
-  const safe = highlightMath(escapeHtml(text));
-  appendHtml(`    ${safe}`, "step-line");
-}
-
-function renderSummary(trace) {
-  append("");
-  appendHtml(`Algorithmus: ${escapeHtml(trace.algorithm)}`, "algo-title");
-  if (trace.result && trace.result.length) {
-    append("");
-    divider("Ergebnis");
-    for (const [k, v] of trace.result) renderResultRow(k, v);
-  }
-  append("");
-}
-
-function renderFull(trace) {
-  append("");
-  appendHtml(`Algorithmus: ${escapeHtml(trace.algorithm)}`, "algo-title");
-  if (trace.inputs && trace.inputs.length) {
-    append("");
-    divider("Eingaben");
-    for (const [k, v] of trace.inputs) renderInputRow(k, v);
-  }
-  if (trace.steps && trace.steps.length) {
-    append("");
-    divider("Schritte");
-    for (const step of trace.steps) {
-      append("");
-      renderStepHeader(step.number, step.title);
-      for (const ln of step.lines || []) renderStepLine(ln);
-      if (step.table) {
-        append("");
-        renderTable(step.table, "    ");
-      }
-    }
-  }
-  if (trace.result && trace.result.length) {
-    append("");
-    divider("Ergebnis");
-    for (const [k, v] of trace.result) renderResultRow(k, v);
-  }
-  append("");
-}
-
-function showHelp() {
-  append("Bedienung:", "info");
-  append("  Auswahl per Nummer, 0 für Zurück bzw. Beenden.", "info");
-  append("  Parameter werden einzeln abgefragt; ungültige Werte werden erneut erfragt.", "info");
-  append("  Nach jedem Ergebnis wird gefragt, ob alle Schritte angezeigt werden sollen.", "info");
-  append("  Shortcuts: [/] Suche  [Esc] Zurück  [Ctrl+L] Clear", "info");
-  append("  Sonderbefehle: help, clear, menu, version", "info");
-}
-
-// ────────── Beschreibungen für die Palette ──────────
 const FOLDER_DESCRIPTIONS = {
   modulo: "Grundoperationen der Modulo-Arithmetik: Addition, Multiplikation, schnelle Exponentiation, Inverse und zyklische Gruppen. Bausteine für fast alle anderen Verfahren.",
   crypto: "Vollständige Kryptoverfahren: RSA, Diffie-Hellman, ElGamal, ECC, Paillier, Shamir Three-Pass, Substitution und Caesar – jeweils mit Schritt-für-Schritt-Trace.",
@@ -547,7 +203,6 @@ const FOLDER_DESCRIPTIONS = {
 };
 
 const CMD_DESCRIPTIONS = {
-  // Modulo
   "mod.add":  "Berechnet (a + b) mod n und zeigt die Normalisierung mit rem_euclid.",
   "mod.sub":  "Berechnet (a − b) mod n. Negative Zwischenergebnisse werden korrekt normalisiert.",
   "mod.mul":  "Berechnet (a · b) mod n; nützlich als Baustein für RSA, ElGamal etc.",
@@ -556,7 +211,6 @@ const CMD_DESCRIPTIONS = {
   "mod.inv_mul": "Multiplikatives Inverses via erweitertem Euklidischen Algorithmus. Existiert genau dann, wenn gcd(a, n) = 1.",
   "mod.subgroup": "Erzeugt die von g erzeugte zyklische Untergruppe in (Z/pZ)* und ermittelt deren Ordnung.",
   "mod.primitive_roots": "Listet alle primitiven Wurzeln modulo p (Erzeuger der vollen multiplikativen Gruppe).",
-  // Crypto
   "rsa.keygen":  "RSA-Schlüsselerzeugung aus zwei Primzahlen p, q und öffentlichem Exponenten e. Liefert n, φ(n) und privaten Schlüssel d.",
   "rsa.encrypt": "RSA-Verschlüsselung: c = m^e mod n.",
   "rsa.decrypt": "RSA-Entschlüsselung: m = c^d mod n.",
@@ -577,16 +231,13 @@ const CMD_DESCRIPTIONS = {
   "paillier.decrypt": "Paillier-Entschlüsselung mit λ, μ: m = L(c^λ mod n²) · μ mod n.",
   "caesar.encrypt": "Caesar-Chiffre: jeder Buchstabe wird um k Stellen nach rechts verschoben. Erhält Groß-/Kleinschreibung und Satzzeichen.",
   "caesar.decrypt": "Caesar-Entschlüsselung: verschiebt jeden Buchstaben um k Stellen nach links (= Verschlüsselung mit −k).",
-  // Ident
   "fiat_shamir.round": "Eine Runde des Fiat-Shamir-Identifikationsprotokolls: Commitment x = k² mod n, Challenge e ∈ {0,1}, Response y.",
-  // Analyse
   "bsgs": "Baby-Step-Giant-Step: löst diskreten Logarithmus h = g^x mod p in O(√p) mit Lookup-Tabelle.",
   "pollard_rho.factor": "Pollard-Rho-Faktorisierung: findet einen nicht-trivialen Faktor von n via Zyklus-Suche auf einer Pseudo-Zufallsfolge.",
   "pollard_rho.dlog":   "Pollard-Rho für diskrete Logarithmen mit drei Partitionen und Floyd-Zyklus-Erkennung.",
   "fermat.factor": "Fermat-Faktorisierung: sucht n = a² − b² = (a−b)(a+b). Effizient, wenn die Faktoren nahe beieinander liegen.",
   "transposition.decrypt": "Versucht mehrere Schlüssellängen für eine Spaltentransposition und zeigt die plausibelsten Entschlüsselungen.",
   "freq.analyze": "Buchstaben-Häufigkeitsanalyse: vergleicht beobachtete Häufigkeiten mit der erwarteten Verteilung der gewählten Sprache.",
-  // Playbooks
   "pb.elgamal_mult_homomorph": "Demonstriert die multiplikative Homomorphismus-Eigenschaft von ElGamal anhand zweier Chiffrate.",
   "pb.rsa_priv_from_pub_y":    "Aufgabe: aus (n, e) und einem Geheimtext y den privaten Schlüssel d und den Klartext x bestimmen.",
   "pb.dh_k_from_g_p_alpha_beta": "Aufgabe: aus g, p sowie den öffentlichen Werten α, β den gemeinsamen DH-Schlüssel K rekonstruieren.",
@@ -599,51 +250,634 @@ const CMD_DESCRIPTIONS = {
   "pb.paillier_add_homomorph": "Zeigt die additive Homomorphismus-Eigenschaft von Paillier: E(m1) · E(m2) entschlüsselt zu m1 + m2 mod n.",
 };
 
-function describeEntry(entry) {
-  if (!entry) return null;
-  if (entry.kind === "up") {
-    return { title: "Eine Ebene zurück", body: "Springt im Browse-Modus zurück zur übergeordneten Kategorie." };
-  }
-  if (entry.kind === "folder") {
-    return {
-      title: entry.label,
-      body: FOLDER_DESCRIPTIONS[entry.target] ?? "Untermenü mit weiteren Befehlen.",
-    };
-  }
-  if (entry.kind === "action") {
-    if (entry.action === "showLast") {
-      return { title: entry.label, body: "Zeigt alle Schritte und Tabellen der letzten ausgeführten Berechnung erneut an." };
-    }
-    return { title: entry.label, body: "" };
-  }
-  if (entry.kind === "cmd") {
-    return {
-      title: entry.label,
-      cmd: entry.cmd,
-      menuTitle: entry.menuTitle,
-      body: CMD_DESCRIPTIONS[entry.cmd] ?? "Kein Beschreibungstext hinterlegt.",
-    };
-  }
-  return null;
+let wasm = null;
+let wasmError = null;
+let searchIndex = [];
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-function updatePaletteInfo() {
-  if (!paletteInfo) return;
-  const entry = paletteState.results[paletteState.selected];
-  const info = describeEntry(entry);
-  if (!info) {
-    paletteInfo.innerHTML = `<div class="palette-info-empty">Eintrag wählen, um eine Erklärung zu sehen…</div>`;
+function highlightMath(escaped) {
+  const tokens = [
+    "\\bmod\\b", "\\bgcd\\b", "\\blcm\\b",
+    "≡", "⁻¹", "²", "³", "λ", "μ", "≠", "→", "·"
+  ];
+  const re = new RegExp("(" + tokens.join("|") + ")", "g");
+  return escaped.replace(re, '<span class="op">$1</span>');
+}
+
+// ────────── Pane (ein Modulkontext) ──────────
+class Pane {
+  constructor() {
+    const tpl = document.getElementById("pane-template");
+    this.el = tpl.content.firstElementChild.cloneNode(true);
+    this.kind = "leaf";
+    this.parent = null;
+    this.breadcrumbEl = this.el.querySelector(".breadcrumb-path");
+    this.termEl = this.el.querySelector(".terminal");
+    this.formEl = this.el.querySelector(".prompt-form");
+    this.inputEl = this.el.querySelector(".prompt-input");
+
+    this.state = { mode: "menu", menu: "main", pending: null };
+    this.history = [];
+    this.historyIndex = -1;
+    this.busy = false;
+    this.lastTrace = null;
+
+    this.formEl.addEventListener("submit", (e) => this.onSubmit(e));
+    this.el.addEventListener("mousedown", () => setActive(this));
+    this.inputEl.addEventListener("focus", () => setActive(this));
+  }
+
+  append(text, cls = "line") {
+    const el = document.createElement("div");
+    el.className = cls;
+    el.textContent = text;
+    this.termEl.appendChild(el);
+    this.termEl.scrollTop = this.termEl.scrollHeight;
+    return el;
+  }
+
+  appendHtml(html, cls = "line") {
+    const el = document.createElement("div");
+    el.className = cls;
+    el.innerHTML = html;
+    this.termEl.appendChild(el);
+    this.termEl.scrollTop = this.termEl.scrollHeight;
+    return el;
+  }
+
+  clearTerminal() { this.termEl.innerHTML = ""; }
+  focus() { this.inputEl.focus({ preventScroll: true }); }
+
+  setBreadcrumb(name) {
+    const trail = ["cryputil"];
+    if (name !== "main") trail.push(MENUS[name]?.title ?? name);
+    this.breadcrumbEl.textContent = trail.join(" ▸ ");
+  }
+
+  divider(label) {
+    const line = "──── " + label + " " + "─".repeat(Math.max(0, 58 - label.length));
+    this.appendHtml(
+      `<span class="section-divider">${escapeHtml(line.slice(0, 5))}</span>` +
+      `<span class="section-title">${escapeHtml(label)}</span> ` +
+      `<span class="section-divider">${escapeHtml(line.slice(5 + label.length + 1))}</span>`,
+      "section-header"
+    );
+  }
+
+  showMenu(name) {
+    this.state.mode = "menu";
+    this.state.menu = name;
+    this.setBreadcrumb(name);
+    const menu = MENUS[name];
+    this.append("");
+    this.append(menu.title, "section-title");
+    menu.items.forEach((it, i) => this.append(`${i + 1}) ${it.label}`));
+    this.append(`0) ${menu.backLabel ?? "Zurück"}`);
+  }
+
+  startCollecting(item) {
+    this.state.mode = "collect";
+    this.state.pending = { item, values: {}, idx: 0 };
+    this.advanceStep();
+  }
+
+  advanceStep() {
+    const p = this.state.pending;
+    const steps = p.item.steps || [];
+    while (p.idx < steps.length) {
+      const step = steps[p.idx];
+      if (step.type === "info") {
+        this.append("");
+        for (const ln of step.lines) this.append(ln, "info");
+        p.idx++;
+        continue;
+      }
+      if (step.type === "int" || step.type === "str") {
+        this.promptStep(step);
+        return;
+      }
+      if (step.type === "opt_int") {
+        this.state.mode = "opt_yesno";
+        this.append(`  ${step.question} [j/n]: `, "info");
+        return;
+      }
+      p.idx++;
+    }
+    this.runCommand();
+  }
+
+  promptStep(step) {
+    this.state.mode = "collect";
+    this.append(`  ${step.label}: `, "info");
+  }
+
+  handleStepInput(value) {
+    const p = this.state.pending;
+    const step = p.item.steps[p.idx];
+    if (step.type === "str") {
+      p.values[step.key] = value;
+      p.idx++;
+      this.advanceStep();
+      return;
+    }
+    if (step.type === "int") {
+      if (!/^-?\d+$/.test(value.trim())) {
+        this.append("    ungültige Ganzzahl", "err");
+        this.promptStep(step);
+        return;
+      }
+      const v = BigInt(value.trim());
+      if (step.min !== undefined && v < BigInt(step.min)) {
+        this.append(`    Wert muss >= ${step.min} sein.`, "err");
+        this.promptStep(step);
+        return;
+      }
+      p.values[step.key] = value.trim();
+      p.idx++;
+      this.advanceStep();
+      return;
+    }
+  }
+
+  handleOptYesNo(value) {
+    const p = this.state.pending;
+    const step = p.item.steps[p.idx];
+    const v = value.trim().toLowerCase();
+    if (["j", "ja", "y", "yes"].includes(v)) {
+      this.state.mode = "collect";
+      p.idx++;
+      p.item.steps.splice(p.idx, 0, I(step.key, step.label, step.min));
+      this.advanceStep();
+      return;
+    }
+    if (["n", "nein", "no"].includes(v)) {
+      this.state.mode = "collect";
+      p.idx++;
+      this.advanceStep();
+      return;
+    }
+    this.append("    Bitte j oder n eingeben.", "err");
+  }
+
+  async runCommand() {
+    const p = this.state.pending;
+    const cmd = p.item.cmd;
+    const params = p.values;
+    this.state.pending = null;
+
+    if (!wasm) {
+      this.append("[error] WASM-Modul nicht geladen", "err");
+      if (wasmError) this.append(`        ${wasmError}`, "err");
+      this.showMenu(this.state.menu);
+      return;
+    }
+
+    this.busy = true;
+    try {
+      const res = wasm.run(cmd, params);
+      if (res.ok) {
+        this.lastTrace = res.trace;
+        this.renderSummary(res.trace);
+        this.askShowSteps();
+        this.busy = false;
+        return;
+      } else {
+        this.append("", "");
+        this.append(`Fehler: ${res.error}`, "err");
+        this.append("");
+      }
+    } catch (e) {
+      this.append(`Fehler: ${e.message || e}`, "err");
+    } finally {
+      this.busy = false;
+    }
+    this.showMenu(this.state.menu);
+  }
+
+  askShowSteps() {
+    this.state.mode = "ask_show_steps";
+    this.append("  Alle Schritte anzeigen? [j/n]: ", "info");
+  }
+
+  handleShowSteps(value) {
+    const v = value.trim().toLowerCase();
+    if (["j", "ja", "y", "yes"].includes(v)) {
+      this.renderFull(this.lastTrace);
+      this.showMenu(this.state.menu);
+      return;
+    }
+    if (["n", "nein", "no"].includes(v)) {
+      this.showMenu(this.state.menu);
+      return;
+    }
+    this.append("    Bitte j oder n eingeben.", "err");
+  }
+
+  renderTable(table, indent) {
+    const widths = table.headers.map((h) => [...h].length);
+    for (const row of table.rows) {
+      row.forEach((cell, i) => {
+        const len = [...cell].length;
+        if (len > widths[i]) widths[i] = len;
+      });
+    }
+    const pad = (s, w) => s + " ".repeat(Math.max(0, w - [...s].length));
+    const inner = widths.map((w) => "─".repeat(w + 2));
+    const top    = indent + "┌" + inner.join("┬") + "┐";
+    const mid    = indent + "├" + inner.join("┼") + "┤";
+    const bottom = indent + "└" + inner.join("┴") + "┘";
+    const cell = (s, w) => " " + pad(s, w) + " ";
+
+    this.appendHtml(`<span class="table-border">${escapeHtml(top)}</span>`);
+    this.appendHtml(
+      `<span class="table-border">${escapeHtml(indent + "│")}</span>` +
+      table.headers
+        .map((h, i) => `<span class="table-header">${escapeHtml(cell(h, widths[i]))}</span>` +
+                       `<span class="table-border">│</span>`)
+        .join("")
+    );
+    this.appendHtml(`<span class="table-border">${escapeHtml(mid)}</span>`);
+    table.rows.forEach((row, ri) => {
+      const cls = "table-row " + (ri % 2 === 0 ? "even" : "odd");
+      this.appendHtml(
+        `<span class="table-border">${escapeHtml(indent + "│")}</span>` +
+        row.map((c, i) =>
+          `${escapeHtml(cell(c, widths[i] ?? 0))}<span class="table-border">│</span>`
+        ).join(""),
+        cls
+      );
+    });
+    this.appendHtml(`<span class="table-border">${escapeHtml(bottom)}</span>`);
+  }
+
+  renderInputRow(k, v) {
+    this.appendHtml(
+      `<span class="arrow">▸</span><span class="key">${escapeHtml(k)}</span> = ${escapeHtml(v)}`,
+      "input-row"
+    );
+  }
+
+  renderResultRow(k, v) {
+    this.appendHtml(
+      `<span class="star">★</span>${escapeHtml(k)} = <strong>${escapeHtml(v)}</strong>`,
+      "result-row"
+    );
+  }
+
+  renderStepHeader(num, title) {
+    this.appendHtml(
+      `<span class="badge">[${escapeHtml(String(num))}]</span>` +
+      `<span class="step-title">${escapeHtml(title)}</span>`,
+      "step-header"
+    );
+  }
+
+  renderStepLine(text) {
+    const safe = highlightMath(escapeHtml(text));
+    this.appendHtml(`    ${safe}`, "step-line");
+  }
+
+  renderSummary(trace) {
+    this.append("");
+    this.appendHtml(`Algorithmus: ${escapeHtml(trace.algorithm)}`, "algo-title");
+    if (trace.result && trace.result.length) {
+      this.append("");
+      this.divider("Ergebnis");
+      for (const [k, v] of trace.result) this.renderResultRow(k, v);
+    }
+    this.append("");
+  }
+
+  renderFull(trace) {
+    this.append("");
+    this.appendHtml(`Algorithmus: ${escapeHtml(trace.algorithm)}`, "algo-title");
+    if (trace.inputs && trace.inputs.length) {
+      this.append("");
+      this.divider("Eingaben");
+      for (const [k, v] of trace.inputs) this.renderInputRow(k, v);
+    }
+    if (trace.steps && trace.steps.length) {
+      this.append("");
+      this.divider("Schritte");
+      for (const step of trace.steps) {
+        this.append("");
+        this.renderStepHeader(step.number, step.title);
+        for (const ln of step.lines || []) this.renderStepLine(ln);
+        if (step.table) {
+          this.append("");
+          this.renderTable(step.table, "    ");
+        }
+      }
+    }
+    if (trace.result && trace.result.length) {
+      this.append("");
+      this.divider("Ergebnis");
+      for (const [k, v] of trace.result) this.renderResultRow(k, v);
+    }
+    this.append("");
+  }
+
+  showHelp() {
+    this.append("Bedienung:", "info");
+    this.append("  Auswahl per Nummer, 0 für Zurück bzw. Beenden.", "info");
+    this.append("  Parameter werden einzeln abgefragt; ungültige Werte werden erneut erfragt.", "info");
+    this.append("  Nach jedem Ergebnis wird gefragt, ob alle Schritte angezeigt werden sollen.", "info");
+    this.append("  Shortcuts: [/] Suche  [Esc] Zurück  [Ctrl+L] Clear", "info");
+    this.append("  Split: [Ctrl+Shift+B] = Prefix, dann:  [%] vertikal  [\"] horizontal  [Pfeile] Pane wechseln  [x] schließen  [o] nächste  [z] Zoom", "info");
+    this.append("  Sonderbefehle: help, clear, menu, version", "info");
+  }
+
+  abortPending() {
+    this.state.pending = null;
+    this.state.mode = "menu";
+  }
+
+  handleMenuSelection(value) {
+    const choice = value.trim();
+    const menu = MENUS[this.state.menu];
+    if (choice === "0") {
+      if (this.state.menu === "main") this.append("Bye.", "info");
+      else this.showMenu("main");
+      return;
+    }
+    const idx = parseInt(choice, 10);
+    if (!Number.isInteger(idx) || idx < 1 || idx > menu.items.length) {
+      this.append("    ungültige Auswahl", "err");
+      this.showMenu(this.state.menu);
+      return;
+    }
+    const item = menu.items[idx - 1];
+    if (item.goto) {
+      this.showMenu(item.goto);
+    } else if (item.action === "showLast") {
+      if (this.lastTrace) this.renderFull(this.lastTrace);
+      else this.append("Keine vorherige Berechnung.", "warn");
+      this.showMenu(this.state.menu);
+    } else if (item.cmd) {
+      const itemCopy = { ...item, steps: [...(item.steps || [])] };
+      if (!itemCopy.steps.length) {
+        this.state.pending = { item: itemCopy, values: {}, idx: 0 };
+        this.runCommand();
+      } else {
+        this.startCollecting(itemCopy);
+      }
+    }
+  }
+
+  handleSpecial(value) {
+    const v = value.trim().toLowerCase();
+    if (v === "help") { this.showHelp(); return true; }
+    if (v === "clear") { this.clearTerminal(); return true; }
+    if (v === "menu") { this.state.pending = null; this.showMenu("main"); return true; }
+    if (v === "version") { this.append(wasm ? wasm.version() : "wasm not loaded", "info"); return true; }
+    return false;
+  }
+
+  dispatchInput(value) {
+    if (this.state.mode === "menu" && this.handleSpecial(value)) return;
+    if (this.state.mode === "ask_show_steps") return this.handleShowSteps(value);
+    if (this.state.mode === "opt_yesno") return this.handleOptYesNo(value);
+    if (this.state.mode === "collect") return this.handleStepInput(value);
+    return this.handleMenuSelection(value);
+  }
+
+  onSubmit(e) {
+    e.preventDefault();
+    if (this.busy) return;
+    const value = this.inputEl.value;
+    this.inputEl.value = "";
+    this.append(`cryputil> ${value}`, "echo");
+    if (value.trim()) {
+      this.history.push(value);
+      this.historyIndex = this.history.length;
+    }
+    this.dispatchInput(value);
+  }
+
+  historyUp() {
+    if (this.historyIndex > 0) this.historyIndex--;
+    this.inputEl.value = this.history[this.historyIndex] ?? "";
+  }
+
+  historyDown() {
+    if (this.historyIndex < this.history.length - 1) {
+      this.historyIndex++;
+      this.inputEl.value = this.history[this.historyIndex];
+    } else {
+      this.historyIndex = this.history.length;
+      this.inputEl.value = "";
+    }
+  }
+
+  doEscape() {
+    if (this.state.mode === "menu") {
+      if (this.state.menu !== "main") this.showMenu("main");
+    } else {
+      this.abortPending();
+      this.append("  (abgebrochen)", "warn");
+      this.showMenu(this.state.menu);
+    }
+  }
+}
+
+// ────────── Pane-Tree ──────────
+let tree = null;       // root node: Pane (leaf) oder Split
+let activeLeaf = null;
+let zoomed = null;     // wenn gesetzt: nur diese Pane wird gerendert
+
+function makeSplit(direction, a, b) {
+  const node = { kind: "split", direction, children: [a, b], parent: null, el: null };
+  a.parent = node;
+  b.parent = node;
+  return node;
+}
+
+function buildNode(node) {
+  if (node.kind === "leaf") return node.el;
+  const wrap = document.createElement("div");
+  wrap.className = "pane-split " + node.direction;
+  node.el = wrap;
+  for (const child of node.children) wrap.appendChild(buildNode(child));
+  return wrap;
+}
+
+function renderTree() {
+  paneRoot.innerHTML = "";
+  if (zoomed) {
+    paneRoot.appendChild(zoomed.el);
+  } else {
+    paneRoot.appendChild(buildNode(tree));
+  }
+  updateActiveMarker();
+}
+
+function updateActiveMarker() {
+  paneRoot.querySelectorAll(".pane-leaf").forEach((el) => el.classList.remove("active"));
+  if (activeLeaf && (allLeaves(tree).length > 1 || zoomed)) {
+    activeLeaf.el.classList.add("active");
+  }
+}
+
+function setActive(pane) {
+  if (activeLeaf === pane) return;
+  activeLeaf = pane;
+  updateActiveMarker();
+}
+
+function focusActivePane() {
+  if (paletteState.open) return;
+  if (activeLeaf) activeLeaf.focus();
+}
+
+function allLeaves(node, out = []) {
+  if (!node) return out;
+  if (node.kind === "leaf") out.push(node);
+  else for (const c of node.children) allLeaves(c, out);
+  return out;
+}
+
+function firstLeaf(node) {
+  while (node.kind === "split") node = node.children[0];
+  return node;
+}
+
+function splitActive(direction) {
+  if (zoomed) zoomed = null;
+  const old = activeLeaf;
+  const fresh = new Pane();
+  const split = makeSplit(direction, old, fresh);
+  if (old.parent) {
+    const idx = old.parent.children.indexOf(old);
+    old.parent.children[idx] = split;
+    split.parent = old.parent;
+  } else {
+    tree = split;
+  }
+  activeLeaf = fresh;
+  renderTree();
+  fresh.append(BANNER, "ascii");
+  if (!wasm && wasmError) {
+    fresh.append("[warn] WASM-Bundle nicht geladen.", "warn");
+  }
+  fresh.showMenu("main");
+  focusActivePane();
+}
+
+function closeActive() {
+  if (zoomed) zoomed = null;
+  const old = activeLeaf;
+  if (!old.parent) {
+    old.append("  (letzte Pane — kann nicht geschlossen werden)", "warn");
     return;
   }
-  let html = `<h4>${escapeHtml(info.title)}</h4>`;
-  if (info.cmd) html += `<span class="palette-info-cmd">${escapeHtml(info.cmd)}</span>`;
-  if (info.body) html += `<p>${escapeHtml(info.body)}</p>`;
-  if (info.menuTitle) html += `<div class="palette-info-meta">Kategorie: ${escapeHtml(info.menuTitle)}</div>`;
-  paletteInfo.innerHTML = html;
+  const parent = old.parent;
+  const sibling = parent.children[0] === old ? parent.children[1] : parent.children[0];
+  if (parent.parent) {
+    const idx = parent.parent.children.indexOf(parent);
+    parent.parent.children[idx] = sibling;
+    sibling.parent = parent.parent;
+  } else {
+    tree = sibling;
+    sibling.parent = null;
+  }
+  activeLeaf = firstLeaf(sibling);
+  renderTree();
+  focusActivePane();
+}
+
+function focusDirection(dir) {
+  if (zoomed) return;
+  const leaves = allLeaves(tree).filter((l) => l !== activeLeaf);
+  if (!leaves.length) return;
+  const ar = activeLeaf.el.getBoundingClientRect();
+  const acx = ar.left + ar.width / 2;
+  const acy = ar.top + ar.height / 2;
+  let best = null;
+  let bestDist = Infinity;
+  for (const l of leaves) {
+    const r = l.el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const dx = cx - acx;
+    const dy = cy - acy;
+    let primary, secondary;
+    if (dir === "Right" || dir === "Left") {
+      if ((dir === "Right" && dx <= 0) || (dir === "Left" && dx >= 0)) continue;
+      primary = Math.abs(dx);
+      secondary = Math.abs(dy);
+    } else {
+      if ((dir === "Down" && dy <= 0) || (dir === "Up" && dy >= 0)) continue;
+      primary = Math.abs(dy);
+      secondary = Math.abs(dx);
+    }
+    const dist = primary + secondary * 2;
+    if (dist < bestDist) { bestDist = dist; best = l; }
+  }
+  if (best) { setActive(best); focusActivePane(); }
+}
+
+function cycleNext() {
+  if (zoomed) return;
+  const leaves = allLeaves(tree);
+  if (leaves.length < 2) return;
+  const i = leaves.indexOf(activeLeaf);
+  setActive(leaves[(i + 1) % leaves.length]);
+  focusActivePane();
+}
+
+function toggleZoom() {
+  if (allLeaves(tree).length < 2) return;
+  zoomed = zoomed ? null : activeLeaf;
+  renderTree();
+  focusActivePane();
+}
+
+// ────────── Prefix (tmux Ctrl+B) ──────────
+let prefixActive = false;
+let prefixTimer = null;
+
+function startPrefix() {
+  prefixActive = true;
+  prefixHint.textContent = "PREFIX (Ctrl+Shift+B)…";
+  prefixHint.classList.add("visible");
+  clearTimeout(prefixTimer);
+  prefixTimer = setTimeout(endPrefix, 2000);
+}
+
+function endPrefix() {
+  prefixActive = false;
+  prefixHint.classList.remove("visible");
+  clearTimeout(prefixTimer);
+}
+
+function handlePrefixCommand(e) {
+  // Modifier-Only-Events ignorieren (z.B. der Ctrl-Release zwischen Prefix und Taste)
+  if (e.key === "Control" || e.key === "Meta" || e.key === "Shift" || e.key === "Alt") return;
+  endPrefix();
+  const key = e.key;
+  if (key === "%") splitActive("row");
+  else if (key === '"') splitActive("column");
+  else if (key === "ArrowLeft")  focusDirection("Left");
+  else if (key === "ArrowRight") focusDirection("Right");
+  else if (key === "ArrowUp")    focusDirection("Up");
+  else if (key === "ArrowDown")  focusDirection("Down");
+  else if (key === "x") closeActive();
+  else if (key === "o") cycleNext();
+  else if (key === "z") toggleZoom();
+  else if (key === "Escape") { /* cancel */ }
+  else return;
+  e.preventDefault();
 }
 
 // ────────── Befehls-Palette ──────────
-// Flach gefilterter Index für Suchmodus
 function buildSearchIndex() {
   const idx = [];
   for (const [menuKey, menu] of Object.entries(MENUS)) {
@@ -663,19 +897,13 @@ function buildSearchIndex() {
   return idx;
 }
 
-let searchIndex = [];
 const paletteState = {
   open: false,
   results: [],
   selected: 0,
-  cwd: "main",      // aktueller Ordner im Browse-Modus
-  mode: "browse",   // "browse" | "search"
+  cwd: "main",
+  mode: "browse",
 };
-
-function abortPending() {
-  state.pending = null;
-  state.mode = "menu";
-}
 
 function openPalette() {
   if (paletteState.open) return;
@@ -693,7 +921,7 @@ function closePalette() {
   paletteState.open = false;
   palette.classList.add("hidden");
   palette.setAttribute("aria-hidden", "true");
-  input.focus();
+  focusActivePane();
 }
 
 function fuzzyMatch(haystack, needle) {
@@ -712,14 +940,11 @@ function fuzzyMatch(haystack, needle) {
   return score;
 }
 
-// Einträge für einen Ordner: erst "..", dann Unterordner, dann Befehle.
 function browseEntries(menuKey) {
   const menu = MENUS[menuKey];
   if (!menu) return [];
   const out = [];
-  if (menuKey !== "main") {
-    out.push({ kind: "up", label: ".. (Ebene zurück)" });
-  }
+  if (menuKey !== "main") out.push({ kind: "up", label: ".. (Ebene zurück)" });
   for (const item of menu.items) {
     if (item.goto) {
       out.push({ kind: "folder", label: item.label, target: item.goto });
@@ -786,6 +1011,49 @@ function kindGlyph(kind) {
   if (kind === "up") return "↩";
   if (kind === "action") return "✦";
   return "›";
+}
+
+function describeEntry(entry) {
+  if (!entry) return null;
+  if (entry.kind === "up") {
+    return { title: "Eine Ebene zurück", body: "Springt im Browse-Modus zurück zur übergeordneten Kategorie." };
+  }
+  if (entry.kind === "folder") {
+    return {
+      title: entry.label,
+      body: FOLDER_DESCRIPTIONS[entry.target] ?? "Untermenü mit weiteren Befehlen.",
+    };
+  }
+  if (entry.kind === "action") {
+    if (entry.action === "showLast") {
+      return { title: entry.label, body: "Zeigt alle Schritte und Tabellen der letzten ausgeführten Berechnung erneut an." };
+    }
+    return { title: entry.label, body: "" };
+  }
+  if (entry.kind === "cmd") {
+    return {
+      title: entry.label,
+      cmd: entry.cmd,
+      menuTitle: entry.menuTitle,
+      body: CMD_DESCRIPTIONS[entry.cmd] ?? "Kein Beschreibungstext hinterlegt.",
+    };
+  }
+  return null;
+}
+
+function updatePaletteInfo() {
+  if (!paletteInfo) return;
+  const entry = paletteState.results[paletteState.selected];
+  const info = describeEntry(entry);
+  if (!info) {
+    paletteInfo.innerHTML = `<div class="palette-info-empty">Eintrag wählen, um eine Erklärung zu sehen…</div>`;
+    return;
+  }
+  let html = `<h4>${escapeHtml(info.title)}</h4>`;
+  if (info.cmd) html += `<span class="palette-info-cmd">${escapeHtml(info.cmd)}</span>`;
+  if (info.body) html += `<p>${escapeHtml(info.body)}</p>`;
+  if (info.menuTitle) html += `<div class="palette-info-meta">Kategorie: ${escapeHtml(info.menuTitle)}</div>`;
+  paletteInfo.innerHTML = html;
 }
 
 function renderPalette() {
@@ -869,152 +1137,88 @@ function runPaletteSelection() {
   const pick = paletteState.results[paletteState.selected];
   if (!pick) return;
 
-  if (pick.kind === "up") {
-    paletteGoUp();
-    return;
-  }
+  if (pick.kind === "up") { paletteGoUp(); return; }
   if (pick.kind === "folder") {
     paletteState.cwd = pick.target;
     paletteInput.value = "";
     refreshPalette("");
     return;
   }
+
+  const p = activeLeaf;
   if (pick.kind === "action") {
     closePalette();
     if (pick.action === "showLast") {
-      if (lastTrace) renderFull(lastTrace);
-      else append("Keine vorherige Berechnung.", "warn");
-      showMenu(state.menu);
+      if (p.lastTrace) p.renderFull(p.lastTrace);
+      else p.append("Keine vorherige Berechnung.", "warn");
+      p.showMenu(p.state.menu);
     }
     return;
   }
 
-  // cmd
   closePalette();
-  abortPending();
-  state.menu = pick.menuKey;
-  setBreadcrumb(pick.menuKey);
-  append("");
-  append(`> ${pick.menuTitle} / ${pick.label}`, "echo");
+  p.abortPending();
+  p.state.menu = pick.menuKey;
+  p.setBreadcrumb(pick.menuKey);
+  p.append("");
+  p.append(`> ${pick.menuTitle} / ${pick.label}`, "echo");
   const itemCopy = { ...pick.item, steps: [...(pick.item.steps || [])] };
   if (!itemCopy.steps.length) {
-    state.pending = { item: itemCopy, values: {}, idx: 0 };
-    runCommand();
+    p.state.pending = { item: itemCopy, values: {}, idx: 0 };
+    p.runCommand();
   } else {
-    startCollecting(itemCopy);
+    p.startCollecting(itemCopy);
   }
 }
 
-function handleMenuSelection(value) {
-  const choice = value.trim();
-  const menu = MENUS[state.menu];
-  if (choice === "0") {
-    if (state.menu === "main") append("Bye.", "info");
-    else showMenu("main");
+// ────────── Globale Shortcuts ──────────
+function isPrintableKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  return e.key.length === 1;
+}
+
+function onGlobalKeydown(e) {
+  // Palette hat eigenen Handler auf paletteInput
+  if (paletteState.open) return;
+
+  if (prefixActive) {
+    handlePrefixCommand(e);
     return;
   }
-  const idx = parseInt(choice, 10);
-  if (!Number.isInteger(idx) || idx < 1 || idx > menu.items.length) {
-    append("    ungültige Auswahl", "err");
-    showMenu(state.menu);
+
+  // tmux-Prefix (Ctrl+Shift+B; Ctrl+B kollidiert mit emacs-Cursor-Bindings in Chrome auf macOS)
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "b") {
+    startPrefix();
+    e.preventDefault();
     return;
   }
-  const item = menu.items[idx - 1];
-  if (item.goto) {
-    showMenu(item.goto);
-  } else if (item.action === "showLast") {
-    if (lastTrace) renderFull(lastTrace);
-    else append("Keine vorherige Berechnung.", "warn");
-    showMenu(state.menu);
-  } else if (item.cmd) {
-    const itemCopy = { ...item, steps: [...(item.steps || [])] };
-    if (!itemCopy.steps.length) {
-      state.pending = { item: itemCopy, values: {}, idx: 0 };
-      runCommand();
-    } else {
-      startCollecting(itemCopy);
-    }
-  }
-}
 
-function handleSpecial(value) {
-  const v = value.trim().toLowerCase();
-  if (v === "help") { showHelp(); return true; }
-  if (v === "clear") { clearTerminal(); return true; }
-  if (v === "menu") { state.pending = null; showMenu("main"); return true; }
-  if (v === "version") { append(wasm ? wasm.version() : "wasm not loaded", "info"); return true; }
-  return false;
-}
+  const p = activeLeaf;
+  if (!p) return;
 
-function dispatchInput(value) {
-  if (state.mode === "menu" && handleSpecial(value)) return;
-  if (state.mode === "ask_show_steps") return handleShowSteps(value);
-  if (state.mode === "opt_yesno") return handleOptYesNo(value);
-  if (state.mode === "collect") return handleStepInput(value);
-  return handleMenuSelection(value);
-}
+  const inInput = e.target === p.inputEl;
 
-async function loadWasm() {
-  try {
-    const mod = await import("./pkg/cryputil_wasm.js");
-    await mod.default();
-    wasm = mod;
-    append("[ready]", "info");
-  } catch (e) {
-    wasmError = e.message || String(e);
-    append("[warn] WASM-Bundle nicht gefunden – nur help/clear verfügbar.", "warn");
-    append("       Build: wasm-pack build --target web --out-dir ../../frontend/pkg crates/wasm", "warn");
-  }
-  showMenu("main");
-}
-
-function onSubmit(e) {
-  e.preventDefault();
-  if (busy) return;
-  const value = input.value;
-  input.value = "";
-  append(`cryputil> ${value}`, "echo");
-  if (value.trim()) {
-    history.push(value);
-    historyIndex = history.length;
-  }
-  dispatchInput(value);
-}
-
-function onKeydown(e) {
-  if (e.key === "ArrowUp") {
-    if (historyIndex > 0) historyIndex--;
-    input.value = history[historyIndex] ?? "";
+  if (e.key === "ArrowUp" && inInput) {
+    p.historyUp();
     e.preventDefault();
-  } else if (e.key === "ArrowDown") {
-    if (historyIndex < history.length - 1) {
-      historyIndex++;
-      input.value = history[historyIndex];
-    } else {
-      historyIndex = history.length;
-      input.value = "";
-    }
+  } else if (e.key === "ArrowDown" && inInput) {
+    p.historyDown();
     e.preventDefault();
-  } else if (e.key === "l" && (e.ctrlKey || e.metaKey)) {
-    clearTerminal();
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "l") {
+    p.clearTerminal();
     e.preventDefault();
   } else if (e.key === "Escape") {
-    if (state.mode === "menu") {
-      if (state.menu !== "main") {
-        showMenu("main");
-      }
-    } else {
-      abortPending();
-      append("  (abgebrochen)", "warn");
-      showMenu(state.menu);
-    }
+    p.doEscape();
     e.preventDefault();
-  } else if (e.key === "/" && !input.value && state.mode === "menu") {
+  } else if (e.key === "/" && (!inInput || !p.inputEl.value) && p.state.mode === "menu") {
     openPalette();
     e.preventDefault();
-  } else if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
     openPalette();
     e.preventDefault();
+  } else if (!inInput && isPrintableKey(e)) {
+    // User tippt, ohne dass Input fokussiert ist — Fokus zurückholen.
+    p.focus();
   }
 }
 
@@ -1037,19 +1241,60 @@ function onPaletteKeydown(e) {
   }
 }
 
+async function loadWasm() {
+  try {
+    const mod = await import("./pkg/cryputil_wasm.js");
+    await mod.default();
+    wasm = mod;
+    for (const l of allLeaves(tree)) l.append("[ready]", "info");
+  } catch (e) {
+    wasmError = e.message || String(e);
+    for (const l of allLeaves(tree)) {
+      l.append("[warn] WASM-Bundle nicht gefunden – nur help/clear verfügbar.", "warn");
+      l.append("       Build: wasm-pack build --target web --out-dir ../../frontend/pkg crates/wasm", "warn");
+    }
+  }
+  for (const l of allLeaves(tree)) l.showMenu("main");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  append(BANNER, "ascii");
-  loadWasm();
   searchIndex = buildSearchIndex();
-  setBreadcrumb("main");
-  form.addEventListener("submit", onSubmit);
-  input.addEventListener("keydown", onKeydown);
+
+  const first = new Pane();
+  tree = first;
+  activeLeaf = first;
+  renderTree();
+  first.append(BANNER, "ascii");
+  loadWasm();
+
+  document.addEventListener("keydown", onGlobalKeydown);
   paletteInput.addEventListener("input", (e) => refreshPalette(e.target.value));
   paletteInput.addEventListener("keydown", onPaletteKeydown);
   palette.addEventListener("click", (e) => { if (e.target === palette) closePalette(); });
+
   document.addEventListener("click", (e) => {
     if (paletteState.open) return;
     if (e.target.closest(".palette-box")) return;
-    input.focus();
+    focusActivePane();
   });
+
+  window.addEventListener("focus", focusActivePane);
+  window.addEventListener("resize", focusActivePane);
+
+  const bindToolbar = (id, fn) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      fn();
+      focusActivePane();
+    });
+  };
+  bindToolbar("btn-split-v", () => splitActive("row"));
+  bindToolbar("btn-split-h", () => splitActive("column"));
+  bindToolbar("btn-cycle", cycleNext);
+  bindToolbar("btn-zoom", toggleZoom);
+  bindToolbar("btn-close", closeActive);
+
+  first.focus();
 });
