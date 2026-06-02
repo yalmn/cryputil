@@ -4,7 +4,6 @@ const paletteInput = document.getElementById("palette-input");
 const paletteList = document.getElementById("palette-list");
 const paletteCwd = document.getElementById("palette-cwd");
 const paletteInfo = document.getElementById("palette-info");
-const prefixHint = document.getElementById("prefix-hint");
 
 const BANNER = [
   "                             _   _ _ ",
@@ -591,7 +590,7 @@ class Pane {
     this.append("  Parameter werden einzeln abgefragt; ungültige Werte werden erneut erfragt.", "info");
     this.append("  Nach jedem Ergebnis wird gefragt, ob alle Schritte angezeigt werden sollen.", "info");
     this.append("  Shortcuts: [/] Suche  [Esc] Zurück  [Ctrl+L] Clear", "info");
-    this.append("  Split: [Ctrl+Shift+B] = Prefix, dann:  [%] vertikal  [\"] horizontal  [Pfeile] Pane wechseln  [x] schließen  [o] nächste  [z] Zoom", "info");
+    this.append("  Split: Buttons oben in der Toolbar (rechts/links/unten/oben, Nächste, Zoom, Pane schließen).", "info");
     this.append("  Sonderbefehle: help, clear, menu, version", "info");
   }
 
@@ -693,13 +692,6 @@ let tree = null;       // root node: Pane (leaf) oder Split
 let activeLeaf = null;
 let zoomed = null;     // wenn gesetzt: nur diese Pane wird gerendert
 
-function makeSplit(direction, a, b) {
-  const node = { kind: "split", direction, children: [a, b], parent: null, el: null };
-  a.parent = node;
-  b.parent = node;
-  return node;
-}
-
 function buildNode(node) {
   if (node.kind === "leaf") return node.el;
   const wrap = document.createElement("div");
@@ -749,24 +741,27 @@ function firstLeaf(node) {
   return node;
 }
 
-function splitActive(direction) {
+// side: "after" → neue Pane rechts (row) / unten (column)
+// side: "before" → neue Pane links / oben
+function splitActive(direction, side = "after") {
   if (zoomed) zoomed = null;
   const old = activeLeaf;
+  const prevParent = old.parent;
   const fresh = new Pane();
-  const split = makeSplit(direction, old, fresh);
-  if (old.parent) {
-    const idx = old.parent.children.indexOf(old);
-    old.parent.children[idx] = split;
-    split.parent = old.parent;
+  const children = side === "before" ? [fresh, old] : [old, fresh];
+  const split = { kind: "split", direction, children, parent: prevParent, el: null };
+  old.parent = split;
+  fresh.parent = split;
+  if (prevParent) {
+    const idx = prevParent.children.indexOf(old);
+    prevParent.children[idx] = split;
   } else {
     tree = split;
   }
   activeLeaf = fresh;
   renderTree();
   fresh.append(BANNER, "ascii");
-  if (!wasm && wasmError) {
-    fresh.append("[warn] WASM-Bundle nicht geladen.", "warn");
-  }
+  if (!wasm && wasmError) fresh.append("[warn] WASM-Bundle nicht geladen.", "warn");
   fresh.showMenu("main");
   focusActivePane();
 }
@@ -838,43 +833,6 @@ function toggleZoom() {
   zoomed = zoomed ? null : activeLeaf;
   renderTree();
   focusActivePane();
-}
-
-// ────────── Prefix (tmux Ctrl+B) ──────────
-let prefixActive = false;
-let prefixTimer = null;
-
-function startPrefix() {
-  prefixActive = true;
-  prefixHint.textContent = "PREFIX (Ctrl+Shift+B)…";
-  prefixHint.classList.add("visible");
-  clearTimeout(prefixTimer);
-  prefixTimer = setTimeout(endPrefix, 2000);
-}
-
-function endPrefix() {
-  prefixActive = false;
-  prefixHint.classList.remove("visible");
-  clearTimeout(prefixTimer);
-}
-
-function handlePrefixCommand(e) {
-  // Modifier-Only-Events ignorieren (z.B. der Ctrl-Release zwischen Prefix und Taste)
-  if (e.key === "Control" || e.key === "Meta" || e.key === "Shift" || e.key === "Alt") return;
-  endPrefix();
-  const key = e.key;
-  if (key === "%") splitActive("row");
-  else if (key === '"') splitActive("column");
-  else if (key === "ArrowLeft")  focusDirection("Left");
-  else if (key === "ArrowRight") focusDirection("Right");
-  else if (key === "ArrowUp")    focusDirection("Up");
-  else if (key === "ArrowDown")  focusDirection("Down");
-  else if (key === "x") closeActive();
-  else if (key === "o") cycleNext();
-  else if (key === "z") toggleZoom();
-  else if (key === "Escape") { /* cancel */ }
-  else return;
-  e.preventDefault();
 }
 
 // ────────── Befehls-Palette ──────────
@@ -1181,18 +1139,6 @@ function onGlobalKeydown(e) {
   // Palette hat eigenen Handler auf paletteInput
   if (paletteState.open) return;
 
-  if (prefixActive) {
-    handlePrefixCommand(e);
-    return;
-  }
-
-  // tmux-Prefix (Ctrl+Shift+B; Ctrl+B kollidiert mit emacs-Cursor-Bindings in Chrome auf macOS)
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "b") {
-    startPrefix();
-    e.preventDefault();
-    return;
-  }
-
   const p = activeLeaf;
   if (!p) return;
 
@@ -1290,8 +1236,10 @@ document.addEventListener("DOMContentLoaded", () => {
       focusActivePane();
     });
   };
-  bindToolbar("btn-split-v", () => splitActive("row"));
-  bindToolbar("btn-split-h", () => splitActive("column"));
+  bindToolbar("btn-split-right", () => splitActive("row",    "after"));
+  bindToolbar("btn-split-left",  () => splitActive("row",    "before"));
+  bindToolbar("btn-split-down",  () => splitActive("column", "after"));
+  bindToolbar("btn-split-up",    () => splitActive("column", "before"));
   bindToolbar("btn-cycle", cycleNext);
   bindToolbar("btn-zoom", toggleZoom);
   bindToolbar("btn-close", closeActive);

@@ -28,7 +28,7 @@ html, body {
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 50px 16px 16px;
   box-sizing: border-box;
   text-shadow: 0 0 1px rgba(76, 255, 122, 0.5);
 }
@@ -62,23 +62,40 @@ html, body {
   z-index: 6;
 }
 
-/* ────────── Pane Toolbar ────────── */
+/* ────────── Pane Toolbar (fixed at top, outside CRT overlay) ────────── */
 .pane-toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
+  align-items: center;
   gap: 6px;
-  padding: 4px 6px 10px;
-  border-bottom: 1px dashed var(--fg-mute);
-  margin-bottom: 8px;
+  padding: 6px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--fg-mute);
   flex-wrap: wrap;
-  z-index: 10;
-  position: relative;
+  z-index: 200;
+}
+.pane-toolbar-label {
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
+  margin-right: 2px;
+}
+.pane-toolbar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--fg-mute);
+  margin: 0 6px;
 }
 .pane-toolbar button {
   background: rgba(76, 255, 122, 0.05);
   color: var(--fg);
   border: 1px solid var(--fg-dim);
   border-radius: 3px;
-  padding: 3px 10px;
+  padding: 4px 10px;
   font-family: inherit;
   font-size: 0.85em;
   cursor: pointer;
@@ -93,6 +110,7 @@ html, body {
 .pane-toolbar button:active {
   background: rgba(158, 255, 176, 0.2);
 }
+
 
 /* ────────── Pane Layout (Split-View) ────────── */
 .pane-root {
@@ -134,26 +152,6 @@ html, body {
   border-color: var(--accent);
   box-shadow: 0 0 8px rgba(158, 255, 176, 0.35);
 }
-
-.prefix-hint {
-  position: fixed;
-  bottom: 10px;
-  right: 14px;
-  background: var(--bg);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  padding: 3px 10px;
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: 0.85em;
-  letter-spacing: 1px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s;
-  z-index: 1000;
-  text-shadow: 0 0 4px rgba(158, 255, 176, 0.6);
-}
-.prefix-hint.visible { opacity: 1; }
 
 /* ────────── Breadcrumb ────────── */
 .breadcrumb {
