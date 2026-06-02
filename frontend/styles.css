@@ -139,24 +139,48 @@ html, body {
   border-radius: 4px;
   padding: 6px 10px;
   overflow: hidden;
-  transition: border-color 0.1s, box-shadow 0.1s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .pane-root > .pane-leaf:only-child {
   border-color: transparent;
   padding: 0;
 }
+.pane-root > .pane-leaf:only-child .pane-tag { display: none; }
+
 .pane-split .pane-leaf {
-  border-color: var(--fg-mute);
+  border-color: var(--fg-dim);
 }
 .pane-leaf.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(158, 255, 176, 0.35);
+  border: 2px solid var(--accent);
+  padding: 5px 9px;
+  box-shadow: 0 0 12px rgba(158, 255, 176, 0.5),
+              inset 0 0 16px rgba(158, 255, 176, 0.08);
 }
+
+.pane-tag {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--fg-dim);
+  border-radius: 2px;
+  color: var(--fg-dim);
+  font-size: 0.8em;
+  letter-spacing: 0.5px;
+}
+.pane-leaf.active .pane-tag {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(158, 255, 176, 0.08);
+}
+
+@keyframes pane-flash {
+  0%   { background: rgba(158, 255, 176, 0.25); }
+  100% { background: transparent; }
+}
+.pane-leaf.flash { animation: pane-flash 0.5s ease-out; }
 
 /* ────────── Breadcrumb ────────── */
 .breadcrumb {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: 4px 6px 8px;
   border-bottom: 1px dashed var(--fg-mute);
@@ -164,6 +188,9 @@ html, body {
   font-size: 0.85em;
   flex-wrap: wrap;
   gap: 8px;
+}
+.breadcrumb .breadcrumb-hint {
+  margin-left: auto;
 }
 
 .breadcrumb-path {

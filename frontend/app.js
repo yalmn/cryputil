@@ -272,16 +272,22 @@ function highlightMath(escaped) {
 }
 
 // ────────── Pane (ein Modulkontext) ──────────
+let paneCounter = 0;
+
 class Pane {
   constructor() {
+    paneCounter += 1;
+    this.id = paneCounter;
     const tpl = document.getElementById("pane-template");
     this.el = tpl.content.firstElementChild.cloneNode(true);
     this.kind = "leaf";
     this.parent = null;
+    this.tagEl = this.el.querySelector(".pane-tag");
     this.breadcrumbEl = this.el.querySelector(".breadcrumb-path");
     this.termEl = this.el.querySelector(".terminal");
     this.formEl = this.el.querySelector(".prompt-form");
     this.inputEl = this.el.querySelector(".prompt-input");
+    if (this.tagEl) this.tagEl.textContent = "Pane " + this.id;
 
     this.state = { mode: "menu", menu: "main", pending: null };
     this.history = [];
@@ -760,10 +766,23 @@ function splitActive(direction, side = "after") {
   }
   activeLeaf = fresh;
   renderTree();
+
+  const label = direction === "row"
+    ? (side === "after" ? "rechts" : "links")
+    : (side === "after" ? "unten" : "oben");
+  old.append(`  (Pane geteilt — neue Pane ${label})`, "info");
   fresh.append(BANNER, "ascii");
   if (!wasm && wasmError) fresh.append("[warn] WASM-Bundle nicht geladen.", "warn");
   fresh.showMenu("main");
+  flashPane(fresh);
+  flashPane(old);
   focusActivePane();
+}
+
+function flashPane(pane) {
+  pane.el.classList.remove("flash");
+  void pane.el.offsetWidth;
+  pane.el.classList.add("flash");
 }
 
 function closeActive() {
